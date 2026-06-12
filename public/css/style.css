@@ -52,6 +52,12 @@ body { animation: pageFade .22s ease-out; }
   display: flex; justify-content: center; padding: 14px 20px;
   pointer-events: none; /* 바 자체는 클릭을 막지 않음 (지도 조작 가능) */
 }
+/* 스크롤되는 화면(지도 외)에선 반투명 유리 바 -> 내용이 로고 뒤로 비치지 않음 */
+body:not(.has-side-panels) .topbar {
+  background: rgba(250, 247, 241, .82);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(236, 228, 216, .6);
+}
 .topbar .logo {
   pointer-events: auto;
   font-family: 'Jua'; font-size: 36px; letter-spacing: 3px;
@@ -60,6 +66,24 @@ body { animation: pageFade .22s ease-out; }
   text-shadow: 0 0 14px rgba(255, 255, 255, .95), 0 0 4px rgba(255, 255, 255, .9), 0 2px 10px rgba(255, 255, 255, .8);
 }
 .topbar .logo:hover { opacity: .85; }
+.logo-mark { font-size: .8em; } /* 로고 앞 발자국 */
+
+/* 뒤로가기 버튼 (지도 외 화면의 좌측 상단) */
+.back-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card); color: var(--accent);
+  font-size: 19px; cursor: pointer; box-shadow: var(--shadow-up);
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.back-btn:hover { background: var(--hl-soft); }
+
+/* 하단 중앙 행: [앨범] 독 [음악] (지도에선 독만 들어 있음) */
+.dock-row {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 400;
+  display: flex; align-items: center; gap: 22px;
+}
+.dock-row .dock { position: static; transform: none; }
+
 /* ---------- 모서리 버튼 (메인 패널 기준 배치) ---------- */
 /* 좌/우 패널이 있는 지도 페이지에선 패널 폭(470px)만큼 안쪽으로 들어옴 */
 .corner { position: fixed; z-index: 400; }
@@ -159,7 +183,7 @@ button:disabled { opacity: .5; transform: none !important; }
 
 input, textarea, select {
   width: 100%; padding: 12px 14px;
-  border: 1.5px solid var(--line); border-radius: 12px;
+  border: 1.5px solid var(--line); border-radius: 14px;
   font-size: 16.5px; font-family: inherit;
   background: var(--card); color: var(--ink);
   transition: border-color .15s, box-shadow .15s;
@@ -173,7 +197,7 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 
 .card {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 18px; padding: 24px; box-shadow: var(--shadow);
+  border-radius: 24px; padding: 26px; box-shadow: var(--shadow);
 }
 
 /* 감정 뱃지: 표정 + 이름 */
@@ -215,6 +239,7 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
   border-left: 1px solid var(--line); overflow-y: auto; padding: 26px 22px;
   display: block; /* 항상 열려 있음 (비었을 땐 안내 문구) */
   flex-shrink: 0;
+  border-radius: 26px 0 0 26px; /* 메인 패널 쪽 모서리만 둥글게 */
 }
 
 /* 아무것도 안 눌렀을 때의 안내 문구 */
@@ -226,6 +251,7 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 .side-left {
   width: 470px; flex-shrink: 0; background: var(--card);
   border-right: 1px solid var(--line); overflow-y: auto; padding: 26px 28px;
+  border-radius: 0 26px 26px 0; /* 메인 패널 쪽 모서리만 둥글게 */
 }
 .side-left .el-title { font-size: 30px; color: var(--accent); margin-bottom: 14px; }
 .el-row {
@@ -250,7 +276,7 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 
 /* 일기 카드 */
 .diary-item {
-  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
   padding: 14px 16px; margin-bottom: 12px; cursor: pointer;
   transition: all .15s;
 }
@@ -347,6 +373,32 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 }
 .photo-preview .pp-del:hover { background: rgba(40, 33, 26, .85); }
 
+/* ---------- 핀 선택 모달 ---------- */
+.modal-back {
+  position: fixed; inset: 0; z-index: 600;
+  background: rgba(30, 25, 18, .45);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-card {
+  background: var(--card); border-radius: 26px; padding: 24px;
+  width: min(580px, 100%); box-shadow: 0 20px 60px rgba(0, 0, 0, .28);
+}
+#pinMapWrap {
+  position: relative; height: 360px; margin-top: 12px;
+  border-radius: 14px; overflow: hidden; border: 1px solid var(--line);
+}
+#pinMap { width: 100%; height: 100%; }
+/* 가운데 고정 핀: 지도를 움직여서 맞추는 방식 (핀 끝이 정확히 중앙) */
+.center-pin {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -90%);
+  font-size: 38px; pointer-events: none;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .3));
+}
+
+/* 기록 폼: 필수/선택 섹션 제목 */
+.form-sec { font-size: 24px; color: var(--accent); margin-bottom: 2px; }
+.form-sec .req { font-size: 13px; color: #D6453A; vertical-align: super; }
+
 /* 저장 결과 카드의 제목 입력칸 */
 #resultCard input { text-align: center; font-size: 19px; font-weight: 700; max-width: 400px; margin: 0 auto; display: block; }
 
@@ -364,11 +416,18 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 .cal-grid .dow:first-child { color: #E08A8A; } /* 일요일 빨강 */
 .cal-cell {
   min-height: 92px; background: var(--card); border: 1px solid var(--line);
-  padding: 8px; font-size: 15.5px; cursor: pointer; border-radius: 12px;
+  padding: 8px; font-size: 15.5px; cursor: pointer; border-radius: 16px;
   position: relative; overflow: hidden; transition: all .15s;
 }
 .cal-cell.empty { background: transparent; border: none; cursor: default; box-shadow: none; }
 .cal-cell:hover:not(.empty) { transform: translateY(-2px); box-shadow: var(--shadow-up); }
+/* 선택한 날짜: 커지고 테두리로 도드라지게 */
+.cal-cell.sel {
+  transform: scale(1.13); z-index: 5;
+  outline: 3px solid var(--accent); outline-offset: 1px;
+  box-shadow: 0 8px 22px rgba(80, 65, 50, .3);
+}
+.cal-cell.sel:hover { transform: scale(1.13); }
 /* 기록이 있는 날: 칸 자체가 그 날의 얼굴이 됨 */
 .cal-cell.face { border: none; }
 .cal-cell.face .dnum { position: relative; z-index: 2; font-weight: 700; }
@@ -431,10 +490,33 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 .cloud-chip.big .cc { color: var(--hl-ink); }
 @keyframes cloudFloat { from { margin-top: -7px; } to { margin-top: 7px; } }
 
+/* ---------- AI 기능 공통 테마 (시리풍) ---------- */
+.ai-btn, .ai-btn.btn {
+  border: 1px solid rgba(140, 160, 255, .35); color: #EAEDFF;
+  background:
+    radial-gradient(130% 220% at 12% 0%, rgba(91, 224, 255, .3), transparent 55%),
+    radial-gradient(130% 220% at 88% 100%, rgba(255, 91, 208, .26), transparent 55%),
+    linear-gradient(135deg, #1C2040, #262254);
+}
+.ai-btn:hover { filter: brightness(1.18); background:
+    radial-gradient(130% 220% at 12% 0%, rgba(91, 224, 255, .3), transparent 55%),
+    radial-gradient(130% 220% at 88% 100%, rgba(255, 91, 208, .26), transparent 55%),
+    linear-gradient(135deg, #1C2040, #262254); }
+
+/* 지도 패널 안: AI 버튼·회고와 아래 기록 목록 사이 숨 쉴 간격 */
+.panel .ai-btn { margin-bottom: 18px; }
+.panel .ai-story { margin-top: 0; margin-bottom: 18px; }
+
 /* ---------- AI 회고 글상자 ---------- */
 .ai-story {
-  margin-top: 12px; background: var(--hl-soft); border-radius: 14px;
-  padding: 16px 18px; font-size: 16px; line-height: 1.9; white-space: pre-wrap;
+  margin-top: 12px; border-radius: 20px;
+  padding: 18px 20px; font-size: 16px; line-height: 1.95; white-space: pre-wrap;
+  /* 시리 테마: 어두운 유리 위에 오로라 빛 */
+  background:
+    radial-gradient(130% 200% at 12% 0%, rgba(91, 224, 255, .16), transparent 55%),
+    radial-gradient(130% 200% at 88% 100%, rgba(255, 91, 208, .14), transparent 55%),
+    linear-gradient(150deg, #1D2140, #15182F 70%);
+  color: #E7EAFF; border: 1px solid rgba(140, 160, 255, .22);
 }
 .ai-story::before { content: '✨ '; }
 .ai-story.loading::before { content: ''; } /* 로딩 중엔 ✨ 없이 물결만 */
@@ -444,7 +526,7 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 /* ---------- AI 로딩 연출: 시리풍 (어두운 유리 + 빛나는 물결 띠) ---------- */
 .ai-story.loading { background: transparent; padding: 0; }
 .ai-loading {
-  text-align: center; padding: 0; overflow: hidden; border-radius: 16px;
+  text-align: center; padding: 0; overflow: hidden; border-radius: 20px;
   background: radial-gradient(130% 170% at 28% 0%, #3A3158 0%, #171B38 55%, #0B0E24 100%);
 }
 .ai-loading svg { width: 100%; height: 96px; display: block; }
@@ -465,15 +547,16 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 /* ---------- 보관함 (사진/노래) ---------- */
 .page.wide { max-width: 920px; }
 
-/* 사진: 앨범 격자 */
-.gal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+/* 사진: 원본 비율을 살린 벽돌(masonry) 격자 — 세로 사진/가로 사진이 패턴처럼 채워짐 */
+.gal-grid { columns: 3 230px; column-gap: 16px; }
 .gal-item {
-  position: relative; display: block; aspect-ratio: 1; overflow: hidden;
-  border-radius: 14px; border: 1px solid var(--line); text-decoration: none;
+  position: relative; display: block; overflow: hidden;
+  break-inside: avoid; margin-bottom: 16px;
+  border-radius: 18px; border: 1px solid var(--line); text-decoration: none;
   box-shadow: var(--shadow); transition: all .15s;
 }
 .gal-item:hover { transform: translateY(-3px); box-shadow: var(--shadow-up); }
-.gal-item > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gal-item > img { width: 100%; height: auto; display: block; }
 .gal-cap {
   position: absolute; left: 0; right: 0; bottom: 0;
   display: flex; gap: 8px; align-items: center; padding: 26px 12px 10px;
@@ -483,21 +566,26 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 .gal-title { color: #fff; font-size: 15px; font-weight: 700; line-height: 1.3; }
 .gal-sub { color: rgba(255, 255, 255, .8); font-size: 12.5px; }
 
-/* 노래: 앨범아트 목록 */
-.song-item {
-  display: flex; gap: 16px; align-items: center; text-decoration: none; color: var(--ink);
-  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-  padding: 12px 16px; margin-bottom: 12px; transition: all .15s;
+/* 노래: 한 줄에 3개 카드 — 앨범아트 크게, 아래 곡 제목, 그 아래 어떤 기억인지 */
+.song-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.song-card {
+  display: block; text-decoration: none; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  padding: 14px; transition: all .15s; box-shadow: var(--shadow);
 }
-.song-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-up); }
+.song-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-up); }
 .song-art {
-  width: 76px; height: 76px; border-radius: 10px; overflow: hidden; flex-shrink: 0;
+  width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
   background: var(--hl-soft); display: flex; align-items: center; justify-content: center;
-  font-size: 26px; box-shadow: var(--shadow);
+  font-size: 34px; margin-bottom: 12px;
 }
 .song-art img { width: 100%; height: 100%; object-fit: cover; }
-.song-title { font-size: 16.5px; font-weight: 700; line-height: 1.4; }
-.song-sub { font-size: 14px; color: var(--sub); display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.song-name {
+  font-size: 15.5px; font-weight: 700; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.song-mem { font-size: 14px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.song-sub2 { font-size: 13px; color: var(--sub); margin-top: 3px; }
 
 /* ---------- 모바일 반응형 ---------- */
 @media (max-width: 860px) {
@@ -551,8 +639,9 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
   .range-row input[type="date"] { width: 142px; }
 
   /* 보관함 */
-  .gal-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .song-art { width: 60px; height: 60px; }
+  .gal-grid { columns: 2 140px; column-gap: 8px; }
+  .gal-item { margin-bottom: 8px; }
+  .song-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
   /* 작성 폼 */
   .card { padding: 18px 16px; }

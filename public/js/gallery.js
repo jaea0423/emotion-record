@@ -17,7 +17,8 @@ function render() {
   const visible = filterDiaries(diaries); // 기간 필터 적용 (common.js)
 
   if (!IS_MUSIC) {
-    // ----- 앨범: 사진 격자 -----
+    // ----- 앨범: 사진 벽돌 격자 -----
+    // (주의: columns 배치에선 lazy 로딩이 높이 0 때문에 영영 안 불려서 즉시 로딩 사용)
     const list = visible.filter((d) => d.photo_path)
       .sort((a, b) => b.diary_date.localeCompare(a.diary_date));
 
@@ -30,7 +31,7 @@ function render() {
       <div class="gal-grid">
         ${list.map((d) => `
           <a class="gal-item" href="/index.html?diary=${d.id}">
-            <img src="${d.photo_path}" alt="${esc(d.ai_title)}" loading="lazy" />
+            <img src="${d.photo_path}" alt="${esc(d.ai_title)}" />
             <div class="gal-cap">
               <div class="gal-face">${faceSVG(d.emotion, 26, 0)}</div>
               <div>
@@ -50,14 +51,17 @@ function render() {
         일기를 쓸 때 그 순간의 노래를 함께 남겨 보세요.</p>`;
       return;
     }
+    // 한 줄에 3개씩: 앨범아트 크게 -> 곡 제목 -> 어떤 기억인지
+    // (같은 노래라도 기억이 다르면 각각 보여 줌)
     body.innerHTML = `<p class="hint" style="margin:14px 0;">노래가 담긴 기억 ${list.length}개</p>
-      ${list.map((d) => `
-        <a class="song-item" href="/index.html?diary=${d.id}">
-          <div class="song-art">${d.music_thumbnail ? `<img src="${d.music_thumbnail}" alt="" loading="lazy">` : '♪'}</div>
-          <div class="song-info">
-            <div class="song-title">${esc(d.music_title) || '제목 없는 곡'}</div>
-            <div class="song-sub">${faceSVG(d.emotion, 20, 0)} ${esc(d.ai_title)} — ${prettyDate(d.diary_date)} · ${esc(d.place_name)}</div>
-          </div>
-        </a>`).join('')}`;
+      <div class="song-grid">
+        ${list.map((d) => `
+          <a class="song-card" href="/index.html?diary=${d.id}">
+            <div class="song-art">${d.music_thumbnail ? `<img src="${d.music_thumbnail}" alt="" loading="lazy">` : '♪'}</div>
+            <div class="song-name">${esc(d.music_title) || '제목 없는 곡'}</div>
+            <div class="song-mem">${faceSVG(d.emotion, 18, 0)} ${esc(d.ai_title) || '(제목 없음)'}</div>
+            <div class="song-sub2">${prettyDate(d.diary_date)} · ${esc(d.place_name)}</div>
+          </a>`).join('')}
+      </div>`;
   }
 }

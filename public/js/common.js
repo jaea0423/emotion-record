@@ -164,7 +164,7 @@ const NAV_ICONS = {
   write: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1Z"/></svg>',
   album: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17.5l4.5-4.5 3 3 3.5-3.5 3.5 4"/></svg>',
   music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.5V6l10-2v12.5"/><circle cx="6.5" cy="18.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>',
-  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L4 14V4h10l6.6 6.6a2 2 0 0 1 0 2.8Z"/><circle cx="8.5" cy="8.5" r="1.6"/></svg>',
+  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 9h14M5 15h14M10.5 4l-3 16M16.5 4l-3 16"/></svg>',
 };
 
 // ================= 화면 공통 뼈대 =================
@@ -190,7 +190,7 @@ async function renderNav(active) {
   // ----- 중앙 상단 로고 -----
   const top = document.createElement('header');
   top.className = 'topbar';
-  top.innerHTML = `<a class="logo" href="/index.html">감정 기록</a>`;
+  top.innerHTML = `<a class="logo" href="/index.html"><span class="logo-mark">👣</span> 기억의 발자국</a>`;
   document.body.prepend(top);
 
   // ----- 메인 패널 좌측 상단: 기간 버튼 -----
@@ -214,6 +214,20 @@ async function renderNav(active) {
     </div>`;
   document.body.appendChild(filterBox);
 
+  // 지도 외 화면: 기간 자리에 뒤로가기 버튼
+  if (!FULL) {
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'corner corner-tl back-btn';
+    backBtn.title = '뒤로가기';
+    backBtn.innerHTML = '←';
+    backBtn.onclick = () => {
+      if (history.length > 1) history.back();
+      else location.href = '/index.html'; // 직접 들어온 경우엔 지도로
+    };
+    document.body.appendChild(backBtn);
+  }
+
   // ----- 메인 패널 우측 상단: 사용자 -> 로그아웃 -----
   const userBox = document.createElement('div');
   userBox.className = 'corner corner-tr fdrop';
@@ -225,7 +239,16 @@ async function renderNav(active) {
   document.body.appendChild(userBox);
 
   // ----- 메인 패널 좌/우측 하단: 앨범 / 음악 -----
+  const dockHTML = `
+    <nav class="dock">
+      <a href="/write.html" class="dock-write ${active === 'write' ? 'on' : ''}">${NAV_ICONS.write}<span class="dl">기억 남기기</span></a>
+      <a href="/index.html" class="${active === 'map' ? 'on' : ''}">${NAV_ICONS.map}<span class="dl">지도</span></a>
+      <a href="/calendar.html" class="${active === 'cal' ? 'on' : ''}">${NAV_ICONS.cal}<span class="dl">캘린더</span></a>
+      <a href="/keywords.html" class="${active === 'kw' ? 'on' : ''}">${NAV_ICONS.tag}<span class="dl">키워드</span></a>
+    </nav>`;
+
   if (FULL) {
+    // 지도: 앨범/음악은 메인 패널 좌/우 하단 모서리에, 독은 하단 중앙에
     const albumBtn = document.createElement('a');
     albumBtn.className = 'corner corner-bl corner-pill';
     albumBtn.href = '/album.html';
@@ -237,18 +260,16 @@ async function renderNav(active) {
     musicBtn.href = '/music.html';
     musicBtn.innerHTML = `${NAV_ICONS.music}<span class="dl">음악</span>`;
     document.body.appendChild(musicBtn);
-  }
 
-  // ----- 하단 중앙 독 -----
-  if (SHOW_DOCK) {
-    const dock = document.createElement('nav');
-    dock.className = 'dock';
-    dock.innerHTML = `
-      <a href="/write.html" class="dock-write ${active === 'write' ? 'on' : ''}">${NAV_ICONS.write}<span class="dl">기억 남기기</span></a>
-      <a href="/index.html" class="${active === 'map' ? 'on' : ''}">${NAV_ICONS.map}<span class="dl">지도</span></a>
-      <a href="/calendar.html" class="${active === 'cal' ? 'on' : ''}">${NAV_ICONS.cal}<span class="dl">캘린더</span></a>
-      <a href="/keywords.html" class="${active === 'kw' ? 'on' : ''}">${NAV_ICONS.tag}<span class="dl">키워드</span></a>`;
-    document.body.appendChild(dock);
+    document.body.insertAdjacentHTML('beforeend', `<div class="dock-row">${dockHTML}</div>`);
+  } else if (SHOW_DOCK) {
+    // 다른 화면: 하단 중앙 기준으로 [앨범] 독 [음악] 나란히
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="dock-row">
+        <a class="corner-pill" href="/album.html">${NAV_ICONS.album}<span class="dl">앨범</span></a>
+        ${dockHTML}
+        <a class="corner-pill" href="/music.html">${NAV_ICONS.music}<span class="dl">음악</span></a>
+      </div>`);
   }
 
   // ----- 기간 필터 동작 -----

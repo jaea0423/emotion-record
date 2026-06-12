@@ -1,7 +1,14 @@
-// write.js - 일기 작성 페이지: 장소 검색, 음악 미리보기, 저장 + AI 결과 즉시 수정
+// write.js - 기록 페이지: 2단계 흐름
+//  1단계 [✨ AI와 함께 정리하기] -> AI가 제목/감정/키워드를 "제안" (아직 저장 아님)
+//  2단계 제안을 그대로 두거나 고친 뒤 [기록으로 남기기] -> 저장하고 지도로 이동
 let selectedPlace = null; // 검색에서 고른 장소 {name, address, lat, lng}
 let musicInfo = null;     // oEmbed로 가져온 곡 정보 {title, thumbnail}
 let placesService = null; // 카카오 장소 검색 객체
+let proposal = null;      // AI 제안 { title, emotion, keywords, fromAI }
+let kwList = [];          // 제안 카드에서 편집 중인 키워드 (최대 5개)
+let pinMap = null;        // 핀 선택 모달의 지도
+let geocoder = null;      // 좌표 -> 주소 변환기
+let pinAddress = '';      // 핀 위치의 주소
 
 (async function init() {
   await renderNav('write');
@@ -79,6 +86,77 @@ document.getElementById('photoDel').onclick = () => {
   document.getElementById('photoName').textContent = '선택된 사진 없음';
 };
 
+// ---------- 지도에서 핀으로 위치 선택 ----------
+const pinModal = document.getElementById('pinModal');
+
+document.getElementById('pinBtn').onclick = () => {
+  if (!placesService) {
+    document.getElementById('formErr').textContent = '지도를 불러오지 못해서 핀 선택을 쓸 수 없어요.';
+    return;
+  }
+  pinModal.style.display = 'flex';
+
+  if (!pinMap) {
+    // 처음 열 때 한 번만 지도 생성
+    pinMap = new kakao.maps.Map(document.getElementById('pinMap'), {
+      center: new kakao.maps.LatLng(37.5665, 126.978),
+      level: 4,
+    });
+    geocoder = new kakao.maps.services.Geocoder();
+    // 지도를 움직이다 멈출 때마다 가운데(핀) 주소를 갱신
+    kakao.maps.event.addListener(pinMap, 'idle', updatePinAddress);
+  }
+  pinMap.relayout(); // 모달이 보인 뒤 크기 재계산 (안 하면 회색으로 나옴)
+
+  // 시작 위치: 이미 고른 장소 > 현재 위치 > 서울시청
+  if (selectedPlace) {
+    pinMap.setCenter(new kakao.maps.LatLng(selectedPlace.lat, selectedPlace.lng));
+  } else if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (p) => pinMap.setCenter(new kakao.maps.LatLng(p.coords.latitude, p.coords.longitude)),
+      () => {}, { timeout: 4000 }
+    );
+  }
+  updatePinAddress();
+};
+
+function updatePinAddress() {
+  const c = pinMap.getCenter();
+  geocoder.coord2Address(c.getLng(), c.getLat(), (res, status) => {
+    const el = document.getElementById('pinAddr');
+    if (status === kakao.maps.services.Status.OK && res[0]) {
+      // 도로명 주소가 있으면 우선, 없으면 지번 주소
+      pinAddress = (res[0].road_address && res[0].road_address.address_name)
+        || (res[0].address && res[0].address.address_name) || '';
+      el.textContent = '📍 ' + (pinAddress || '주소 정보 없음');
+    } else {
+      pinAddress = '';
+      el.textContent = '주소 정보를 찾지 못했어요 (그래도 선택은 가능해요)';
+    }
+  });
+}
+
+document.getElementById('pinCancel').onclick = () => { pinModal.style.display = 'none'; };
+
+document.getElementById('pinOk').onclick = () => {
+  const c = pinMap.getCenter();
+  const desc = document.getElementById('pinDesc').value.trim();
+  // 설명이 없으면 주소를 장소 이름으로 사용
+  selectedPlace = {
+    name: desc || pinAddress || '이름 없는 장소',
+    address: pinAddress,
+    lat: c.getLat(),
+    lng: c.getLng(),
+  };
+  const sel = document.getElementById('selectedPlace');
+  sel.style.display = 'block';
+  // 설명을 안 적어서 이름=주소면 한 번만 표시
+  sel.textContent = '📍 ' + selectedPlace.name
+    + (pinAddress && pinAddress !== selectedPlace.name ? ` (${pinAddress})` : '');
+  document.getElementById('placeResults').style.display = 'none'; // 검색 결과 목록 닫기
+  pinModal.style.display = 'none';
+};
+
 // ---------- 장소 검색 ----------
 document.getElementById('searchBtn').onclick = searchPlace;
 // 엔터 키로도 검색되게 (폼 제출은 막음)
@@ -100,7 +178,7 @@ function searchPlace() {
     box.style.display = 'block';
     // 상위 7개만 보여 줌
     box.innerHTML = results.slice(0, 7).map((r, i) => `
-      <div data-i="${i}">${r.place_name}<span class="p-addr">${r.road_address_name || r.address_name}</span></div>
+      <div data-i="${i}">${esc(r.place_name)}<span class="p-addr">${esc(r.road_address_name || r.address_name)}</span></div>
     `).join('');
 
     // 결과 클릭 -> 장소 선택
@@ -142,16 +220,111 @@ document.getElementById('musicBtn').onclick = async () => {
   }
 };
 
-// ---------- 저장 ----------
+// ---------- 1단계: AI에게 정리 제안 받기 (저장 아님) ----------
 document.getElementById('writeForm').onsubmit = async (e) => {
   e.preventDefault();
   const err = document.getElementById('formErr');
   const btn = document.getElementById('submitBtn');
   err.textContent = '';
 
+  const content = document.getElementById('content').value;
   if (!selectedPlace) { err.textContent = '장소를 검색해서 선택해 주세요.'; return; }
+  if (!document.getElementById('diaryDate').value) { err.textContent = '날짜를 선택해 주세요.'; return; }
+  if (content.trim().length < 5) { err.textContent = '일기를 5자 이상 적어 주세요.'; return; }
 
-  // 사진 파일이 있을 수 있어서 FormData(폼 데이터) 형식으로 전송
+  btn.disabled = true;
+
+  // 제안 카드 자리에 물결 연출
+  const card = document.getElementById('resultCard');
+  card.style.display = 'block';
+  card.innerHTML = aiLoaderHTML('AI가 이 기록을 읽고 있어요');
+  card.scrollIntoView({ behavior: 'smooth' });
+
+  try {
+    // 응답이 빨라도 최소 1.2초는 연출 유지
+    const [ai] = await Promise.all([
+      api('/api/diaries/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      }),
+      sleep(1200),
+    ]);
+    proposal = ai;
+    showProposal(ai);
+  } catch (e2) {
+    err.textContent = e2.message;
+    card.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------- 2단계: 제안 확인/수정 -> 기록으로 남기기 ----------
+function showProposal(ai) {
+  const card = document.getElementById('resultCard');
+  card.innerHTML = `
+    <p class="hint">${ai.fromAI
+      ? 'AI가 이렇게 정리했어요 — 그대로 남기거나, 고쳐서 남겨 주세요'
+      : 'AI 분석에 실패했어요 — 직접 정리해서 남겨 주세요'}</p>
+    <div id="resFace" style="display:flex; justify-content:center; margin:14px 0;">${faceSVG(ai.emotion, 72, 0)}</div>
+    <input id="resTitle" value="${esc(ai.title)}">
+    <div style="display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
+      <select id="resEmo" style="width:auto;">
+        ${EMOTION_LIST.map((e) => `<option ${e === ai.emotion ? 'selected' : ''}>${e}</option>`).join('')}
+      </select>
+    </div>
+    <div class="kw-chips" id="kwEdit" style="justify-content:center; margin-top:14px;"></div>
+    <input id="kwInput" placeholder="키워드 직접 추가하고 Enter (최대 5개)"
+      style="max-width:300px; margin:10px auto 0; font-size:14.5px; font-weight:400; text-align:center;">
+    <button class="btn main" style="width:100%; margin-top:20px;" id="saveBtn">기록으로 남기기</button>
+    <p class="error" id="saveErr"></p>
+  `;
+  card.scrollIntoView({ behavior: 'smooth' });
+
+  // 감정을 바꾸면 얼굴 미리보기도 바로 바뀜
+  document.getElementById('resEmo').onchange = function () {
+    document.getElementById('resFace').innerHTML = faceSVG(this.value, 72, 0);
+  };
+
+  // ----- 키워드 편집: AI 제안 + 직접 추가(✕로 빼기) -----
+  kwList = (ai.keywords || []).slice(0, 5);
+  renderKwChips();
+
+  document.getElementById('kwInput').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const v = e.target.value.replace(/^#/, '').trim().slice(0, 12);
+    if (!v) return;
+    if (kwList.includes(v)) { e.target.value = ''; return; } // 중복 방지
+    if (kwList.length >= 5) return; // 최대 5개
+    kwList.push(v);
+    e.target.value = '';
+    renderKwChips();
+  });
+
+  document.getElementById('saveBtn').onclick = doSave;
+}
+
+// 키워드 칩들을 다시 그림 (✕ 누르면 제거)
+function renderKwChips() {
+  const box = document.getElementById('kwEdit');
+  if (!box) return;
+  box.innerHTML = kwList.length
+    ? kwList.map((k, i) => `<button type="button" class="kw-chip" data-i="${i}">#${esc(k)} ✕</button>`).join('')
+    : '<span class="hint">키워드 없음 — 아래에서 직접 추가할 수 있어요</span>';
+  box.querySelectorAll('.kw-chip').forEach((el) => {
+    el.onclick = () => { kwList.splice(Number(el.dataset.i), 1); renderKwChips(); };
+  });
+}
+
+async function doSave() {
+  const saveBtn = document.getElementById('saveBtn');
+  const saveErr = document.getElementById('saveErr');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '남기는 중...';
+
+  // 사진이 있을 수 있어서 FormData(폼 데이터) 형식으로 전송
   const fd = new FormData();
   fd.append('place_name', selectedPlace.name);
   fd.append('address', selectedPlace.address || '');
@@ -160,7 +333,12 @@ document.getElementById('writeForm').onsubmit = async (e) => {
   fd.append('diary_date', document.getElementById('diaryDate').value);
   fd.append('content', document.getElementById('content').value);
 
-  const photo = document.getElementById('photo').files[0];
+  // 사용자가 확정한 제목/감정/키워드 (서버는 이 값을 그대로 저장)
+  fd.append('ai_title', document.getElementById('resTitle').value.trim());
+  fd.append('emotion', document.getElementById('resEmo').value);
+  fd.append('keywords', kwList.join(',')); // 편집(추가/삭제)된 키워드 그대로
+
+  const photo = photoInput.files[0];
   if (photo) fd.append('photo', photo);
 
   const musicUrl = document.getElementById('musicUrl').value.trim();
@@ -170,79 +348,13 @@ document.getElementById('writeForm').onsubmit = async (e) => {
     fd.append('music_thumbnail', musicInfo.thumbnail || '');
   }
 
-  btn.disabled = true;
-  btn.textContent = 'AI가 감정을 읽는 중...';
-
-  // 결과 카드 자리에 물결 연출을 먼저 보여 줌
-  const card = document.getElementById('resultCard');
-  card.style.display = 'block';
-  card.innerHTML = aiLoaderHTML('AI가 이 기억의 감정을 읽고 있어요');
-  card.scrollIntoView({ behavior: 'smooth' });
-
   try {
-    // 응답이 빨라도 최소 1.2초는 연출 유지
-    const [saved] = await Promise.all([
-      api('/api/diaries', { method: 'POST', body: fd }),
-      sleep(1200),
-    ]);
-    showResultCard(saved);
-
-    document.getElementById('writeForm').reset();
-    selectedPlace = null;
-    musicInfo = null;
-    document.getElementById('selectedPlace').style.display = 'none';
-    document.getElementById('musicPreview').style.display = 'none';
-    document.getElementById('photoPreview').style.display = 'none';
-    document.getElementById('photoName').textContent = '선택된 사진 없음';
-    document.getElementById('diaryDate').value = new Date().toISOString().slice(0, 10);
-  } catch (e2) {
-    err.textContent = e2.message;
-    card.style.display = 'none'; // 실패하면 연출 카드 숨김
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '기억으로 남기기 ✎';
+    const saved = await api('/api/diaries', { method: 'POST', body: fd });
+    // 저장 완료 -> 지도에서 방금 남긴 기록이 열린 상태로 이동
+    location.href = '/index.html?diary=' + saved.id;
+  } catch (e) {
+    saveErr.textContent = e.message;
+    saveBtn.disabled = false;
+    saveBtn.textContent = '기록으로 남기기';
   }
-};
-
-// ---------- 저장 결과 카드: AI의 판단을 그 자리에서 바로 수정 가능 ----------
-function showResultCard(saved) {
-  const card = document.getElementById('resultCard');
-  card.style.display = 'block';
-  card.innerHTML = `
-    <p class="hint">${saved.fromAI
-      ? 'AI가 이 기억을 이렇게 읽었어요 — 마음에 안 들면 바로 고치세요'
-      : 'AI 분석에 실패해 기본값으로 저장했어요 — 직접 고칠 수 있어요'}</p>
-    <div id="resFace" style="display:flex; justify-content:center; margin:14px 0;">${faceSVG(saved.emotion, 72, 0)}</div>
-    <input id="resTitle" value="${esc(saved.ai_title)}">
-    <div style="display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
-      <select id="resEmo" style="width:auto;">
-        ${EMOTION_LIST.map((e) => `<option ${e === saved.emotion ? 'selected' : ''}>${e}</option>`).join('')}
-      </select>
-      <button class="btn" id="resSave">수정 저장</button>
-      <a class="btn main" href="/index.html">지도에서 보기</a>
-    </div>
-    <p class="hint" id="resMsg" style="margin-top:10px;"></p>
-  `;
-  card.scrollIntoView({ behavior: 'smooth' });
-
-  // 감정을 바꾸면 얼굴 미리보기도 바로 바뀜
-  document.getElementById('resEmo').onchange = function () {
-    document.getElementById('resFace').innerHTML = faceSVG(this.value, 72, 0);
-  };
-
-  // 수정 저장: 제목 + 감정을 한 번의 PUT으로 반영
-  document.getElementById('resSave').onclick = async () => {
-    const ai_title = document.getElementById('resTitle').value.trim();
-    const emotion = document.getElementById('resEmo').value;
-    try {
-      await api(`/api/diaries/${saved.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ai_title, emotion }),
-      });
-      document.getElementById('resMsg').textContent = '수정했어요! 지도와 달력에 바로 반영됩니다.';
-    } catch (e) {
-      document.getElementById('resMsg').textContent = e.message;
-    }
-  };
 }

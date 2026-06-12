@@ -100,6 +100,9 @@ let firstLoad = true; // 처음 한 번만 지도 위치를 자동으로 잡기 
 
   await loadDiaries();
 
+  // (시작 위치는 loadDiaries가 잡아 둔 "마지막 기록 위치" 기준
+  //  -- 데스크톱 위치 API는 IP 기반이라 부정확해서 쓰지 않음)
+
   // 캘린더에서 "?diary=ID" 로 넘어온 경우 해당 일기를 바로 열어 줌
   const diaryId = new URLSearchParams(location.search).get('diary');
   if (diaryId) {
@@ -216,7 +219,7 @@ function showCluster(clusterMarkers) {
   body.innerHTML = `
     <h2>이 근처의 기억</h2>
     <p class="addr">장소 ${placeList.length}곳 · 기억 ${list.length}개</p>
-    <button class="btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳들의 이야기</button>
+    <button class="btn ai-btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳들의 이야기</button>
     <div class="ai-story" id="storyBox" style="display:none;"></div>
     ${sorted.map((d) => `
       <div class="diary-item" data-id="${d.id}">
@@ -250,7 +253,7 @@ function showPlace(key) {
   body.innerHTML = `
     <h2>${esc(p.name)}</h2>
     <p class="addr">${esc(p.address) || ''} · 이 곳의 기억 ${p.list.length}개</p>
-    ${p.list.length >= 2 ? `<button class="btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳의 이야기</button>` : ''}
+    ${p.list.length >= 2 ? `<button class="btn ai-btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳의 이야기</button>` : ''}
     <div class="ai-story" id="storyBox" style="display:none;"></div>
     ${sorted.map((d) => `
       <div class="diary-item" data-id="${d.id}">

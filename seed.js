@@ -16,22 +16,22 @@ const hash = bcrypt.hashSync('1234', 10);
 const user = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('demo', hash);
 const uid = user.lastInsertRowid;
 
-// 실제로 작동 확인된 유튜브 링크 (음악 카드/플레이어 시연용)
+// 실제로 작동 확인된 유튜브 음악 링크 (뮤직비디오가 아닌 음원/가사 영상)
 const MUSIC = {
   bamphyunji: {
-    url: 'https://www.youtube.com/watch?v=BzYnNdJhZQw',
-    title: '[MV] IU(아이유) _ Through the Night(밤편지)',
-    thumb: 'https://i.ytimg.com/vi/BzYnNdJhZQw/hqdefault.jpg',
+    url: 'https://www.youtube.com/watch?v=6744glqD6lk', // IU - Topic 공식 음원
+    title: 'IU(아이유) - Through the Night (밤편지)',
+    thumb: 'https://i.ytimg.com/vi/6744glqD6lk/hqdefault.jpg',
   },
   blueming: {
-    url: 'https://www.youtube.com/watch?v=D1PvIWdJ8xo',
-    title: '[MV] IU(아이유) _ Blueming(블루밍)',
-    thumb: 'https://i.ytimg.com/vi/D1PvIWdJ8xo/hqdefault.jpg',
+    url: 'https://www.youtube.com/watch?v=hexYUhMW3IM', // 오디오 버전
+    title: 'IU(아이유) - Blueming (블루밍) (Audio)',
+    thumb: 'https://i.ytimg.com/vi/hexYUhMW3IM/hqdefault.jpg',
   },
   travel: {
-    url: 'https://www.youtube.com/watch?v=xRbPAVnqtcs',
-    title: '[MV] BOL4(볼빨간사춘기) _ Travel(여행)',
-    thumb: 'https://i.ytimg.com/vi/xRbPAVnqtcs/hqdefault.jpg',
+    url: 'https://www.youtube.com/watch?v=g6U2SS-ZMy8', // 벅스 공식 가사 영상 (음원)
+    title: 'BOL4(볼빨간사춘기) - Travel(여행)',
+    thumb: 'https://i.ytimg.com/vi/g6U2SS-ZMy8/hqdefault.jpg',
   },
 };
 

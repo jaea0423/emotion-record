@@ -1,7 +1,7 @@
 {
   "name": "emotion-record",
   "version": "0.1.0",
-  "description": "감정 기록 - 일기가 지도와 달력에 감정 표정으로 새겨지는 사이트",
+  "description": "기억의 발자국 - 일기가 지도와 달력에 감정 표정으로 새겨지는 사이트",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

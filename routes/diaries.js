@@ -108,6 +108,16 @@ router.get('/', (req, res) => {
   res.json(rows);
 });
 
+// ---------- AI 미리 정리 (저장 전 제안) ----------
+// [POST] /api/diaries/preview  body: { content }
+// 저장하지 않고 AI의 제목/감정/키워드 제안만 돌려줌 -> 사용자가 확인/수정한 뒤 저장
+router.post('/preview', async (req, res) => {
+  const { content } = req.body;
+  if (!content || content.trim().length < 5) return res.status(400).json({ error: '일기를 5자 이상 적어 주세요.' });
+  const ai = await analyzeDiary(content);
+  res.json(ai); // { title, emotion, keywords, fromAI }
+});
+
 // ---------- 일기 작성 ----------
 // [POST] /api/diaries  (사진이 있을 수 있어서 multipart/form-data 로 받음)
 // upload를 직접 감싸서, 용량 초과 등 업로드 에러를 "조용한 누락" 대신 명확한 에러로 돌려줌
@@ -117,15 +127,26 @@ router.post('/', (req, res, next) => {
     next();
   });
 }, async (req, res) => {
-  const { place_name, address, lat, lng, content, music_url, music_title, music_thumbnail, diary_date } = req.body;
+  const { place_name, address, lat, lng, content, music_url, music_title, music_thumbnail, diary_date,
+          ai_title, emotion: emotionGiven, keywords: keywordsGiven } = req.body;
 
   // 필수 값 검증
   if (!place_name || !lat || !lng) return res.status(400).json({ error: '장소를 선택해 주세요.' });
   if (!content || content.trim().length < 5) return res.status(400).json({ error: '일기를 5자 이상 적어 주세요.' });
   if (!diary_date) return res.status(400).json({ error: '날짜를 선택해 주세요.' });
 
-  // AI에게 제목 + 감정 분석 요청 (실패하면 fallback이 자동 적용됨)
-  const ai = await analyzeDiary(content);
+  // 미리 정리(제안) 단계를 거쳐서 확정값이 왔으면 그대로 쓰고, 아니면 지금 AI 분석
+  let ai;
+  if (ai_title && emotionGiven && EMOTIONS.includes(emotionGiven)) {
+    ai = {
+      title: String(ai_title).trim().slice(0, 30),
+      emotion: emotionGiven,
+      keywords: String(keywordsGiven || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 5), // 직접 추가 포함 최대 5개
+      fromAI: true,
+    };
+  } else {
+    ai = await analyzeDiary(content); // (실패하면 fallback이 자동 적용됨)
+  }
 
   const result = db
     .prepare(`INSERT INTO diaries

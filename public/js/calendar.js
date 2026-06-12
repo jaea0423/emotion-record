@@ -2,6 +2,7 @@
 let diaries = [];
 let year, month;        // 현재 보고 있는 연/월 (month는 0~11)
 let viewMode = 'month'; // 'month' = 월 보기, 'year' = 연도 보기
+let selectedYmd = null; // 마지막으로 클릭한 날짜 (칸 강조용)
 
 (async function init() {
   await renderNav('cal');
@@ -63,7 +64,7 @@ function renderMonth() {
   const monthDiaries = visible.filter((d) => d.diary_date.startsWith(prefix2));
   const area = document.getElementById('storyArea');
   if (monthDiaries.length >= 2) {
-    area.innerHTML = `<button class="btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 달의 이야기</button>
+    area.innerHTML = `<button class="btn ai-btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 달의 이야기</button>
       <div class="ai-story" id="storyBox" style="display:none;"></div>`;
     wireStory(`${year}년 ${month + 1}월`, monthDiaries.map((d) => d.id));
   } else {
@@ -105,6 +106,15 @@ function renderMonth() {
   grid.querySelectorAll('.cal-cell:not(.empty)').forEach((el) => {
     el.onclick = () => showDay(el.dataset.ymd);
   });
+  markSelected(); // 달을 오가도 선택 표시 유지
+}
+
+// 선택한 날짜 칸을 도드라지게 (커지고 테두리)
+function markSelected() {
+  document.querySelectorAll('.cal-cell.sel').forEach((el) => el.classList.remove('sel'));
+  if (!selectedYmd) return;
+  const el = document.querySelector(`.cal-cell[data-ymd="${selectedYmd}"]`);
+  if (el) el.classList.add('sel');
 }
 
 // ================= 연도 보기 =================
@@ -144,6 +154,8 @@ function renderYear() {
 
 // ================= 이 날의 기억 =================
 function showDay(ymd) {
+  selectedYmd = ymd;
+  markSelected(); // 누른 칸을 바로 강조
   const box = document.getElementById('dayList');
   const dayDiaries = filterDiaries(diaries).filter((d) => d.diary_date === ymd);
 
@@ -157,7 +169,7 @@ function showDay(ymd) {
     // 일기 카드 클릭 시 지도 페이지에서 해당 일기가 열리도록 ?diary=ID 로 이동
     box.innerHTML = `<h2>이 날의 기억</h2>
       <p class="hint" style="margin-bottom:10px;">${prettyDate(ymd)} · ${dayDiaries.length}개</p>
-      <button class="btn" style="width:100%; margin-bottom:6px;" id="dayStoryBtn">✨ AI가 들려주는 이 날의 이야기</button>
+      <button class="btn ai-btn" style="width:100%; margin-bottom:6px;" id="dayStoryBtn">✨ AI가 들려주는 이 날의 이야기</button>
       <div class="ai-story" id="dayStoryBox" style="display:none; margin-bottom:10px;"></div>` +
       dayDiaries.map((d) => `
         <div class="diary-item" onclick="location.href='/index.html?diary=${d.id}'">
