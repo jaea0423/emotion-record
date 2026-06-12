@@ -38,6 +38,47 @@ let placesService = null; // 카카오 장소 검색 객체
   }
 })();
 
+// ---------- 사진: 예쁜 버튼 + 미리보기 ----------
+const photoInput = document.getElementById('photo');
+document.getElementById('photoBtn').onclick = () => photoInput.click(); // 숨겨둔 진짜 input을 대신 눌러 줌
+
+photoInput.onchange = () => {
+  const file = photoInput.files[0];
+  const preview = document.getElementById('photoPreview');
+  const nameEl = document.getElementById('photoName');
+  if (!file) { preview.style.display = 'none'; nameEl.textContent = '선택된 사진 없음'; return; }
+
+  // 사진(이미지)만 허용 — 다른 파일이면 되돌림
+  if (!file.type.startsWith('image/')) {
+    photoInput.value = '';
+    document.getElementById('formErr').textContent = '사진(이미지 파일)만 넣을 수 있어요.';
+    return;
+  }
+  // 5MB 초과는 서버가 받지 않으므로 여기서 미리 알려 줌 (조용히 누락되는 것 방지)
+  if (file.size > 5 * 1024 * 1024) {
+    photoInput.value = '';
+    document.getElementById('formErr').textContent = '사진은 5MB 이하만 올릴 수 있어요. (현재 ' + (file.size / 1024 / 1024).toFixed(1) + 'MB)';
+    return;
+  }
+  document.getElementById('formErr').textContent = '';
+  nameEl.textContent = file.name;
+
+  // 선택한 사진을 바로 미리보기로 보여 줌
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('photoImg').src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+};
+
+// ✕ 버튼: 사진 빼기
+document.getElementById('photoDel').onclick = () => {
+  photoInput.value = '';
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoName').textContent = '선택된 사진 없음';
+};
+
 // ---------- 장소 검색 ----------
 document.getElementById('searchBtn').onclick = searchPlace;
 // 엔터 키로도 검색되게 (폼 제출은 막음)
@@ -132,8 +173,18 @@ document.getElementById('writeForm').onsubmit = async (e) => {
   btn.disabled = true;
   btn.textContent = 'AI가 감정을 읽는 중...';
 
+  // 결과 카드 자리에 물결 연출을 먼저 보여 줌
+  const card = document.getElementById('resultCard');
+  card.style.display = 'block';
+  card.innerHTML = aiLoaderHTML('AI가 이 기억의 감정을 읽고 있어요');
+  card.scrollIntoView({ behavior: 'smooth' });
+
   try {
-    const saved = await api('/api/diaries', { method: 'POST', body: fd });
+    // 응답이 빨라도 최소 1.2초는 연출 유지
+    const [saved] = await Promise.all([
+      api('/api/diaries', { method: 'POST', body: fd }),
+      sleep(1200),
+    ]);
     showResultCard(saved);
 
     document.getElementById('writeForm').reset();
@@ -141,9 +192,12 @@ document.getElementById('writeForm').onsubmit = async (e) => {
     musicInfo = null;
     document.getElementById('selectedPlace').style.display = 'none';
     document.getElementById('musicPreview').style.display = 'none';
+    document.getElementById('photoPreview').style.display = 'none';
+    document.getElementById('photoName').textContent = '선택된 사진 없음';
     document.getElementById('diaryDate').value = new Date().toISOString().slice(0, 10);
   } catch (e2) {
     err.textContent = e2.message;
+    card.style.display = 'none'; // 실패하면 연출 카드 숨김
   } finally {
     btn.disabled = false;
     btn.textContent = '기억으로 남기기 ✎';
@@ -159,7 +213,7 @@ function showResultCard(saved) {
       ? 'AI가 이 기억을 이렇게 읽었어요 — 마음에 안 들면 바로 고치세요'
       : 'AI 분석에 실패해 기본값으로 저장했어요 — 직접 고칠 수 있어요'}</p>
     <div id="resFace" style="display:flex; justify-content:center; margin:14px 0;">${faceSVG(saved.emotion, 72, 0)}</div>
-    <input id="resTitle" value="${(saved.ai_title || '').replace(/"/g, '&quot;')}">
+    <input id="resTitle" value="${esc(saved.ai_title)}">
     <div style="display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
       <select id="resEmo" style="width:auto;">
         ${EMOTION_LIST.map((e) => `<option ${e === saved.emotion ? 'selected' : ''}>${e}</option>`).join('')}

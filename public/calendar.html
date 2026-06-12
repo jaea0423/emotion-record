@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>감정 기록 - 날짜별</title>
-  <!-- 손글씨 폰트: 제목용(나눔펜), 본문용(개구) -->
-  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu:wght@300;400;700&display=swap" rel="stylesheet" />
+  <!-- 폰트: 제목용 Jua(둥근 귀여운), 본문용 Noto Sans KR(깔끔한 고딕) -->
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -19,7 +19,15 @@
       <button id="prevBtn">◀</button>
       <strong id="calTitle"></strong>
       <button id="nextBtn">▶</button>
+      <!-- 월/년 보기 전환 -->
+      <div class="cal-mode">
+        <button id="modeMonth" class="on">월</button>
+        <button id="modeYear">년</button>
+      </div>
     </div>
+
+    <!-- 이 달의 AI 회고 -->
+    <div id="storyArea" style="margin-bottom:14px;"></div>
 
     <!-- 달력 격자 (기록 있는 날은 칸 자체가 얼굴이 됨) -->
     <div class="cal-grid" id="calGrid"></div>

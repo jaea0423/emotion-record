@@ -11,10 +11,11 @@ const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
  * Gemini가 실패하면 fallback(기본값)으로 처리해서 서비스가 멈추지 않게 한다.
  */
 async function analyzeDiary(content) {
-  // 실패했을 때 쓸 기본값: 첫 문장 일부를 제목으로, 감정은 '그저 그런 날'
+  // 실패했을 때 쓸 기본값: 첫 문장 일부를 제목으로, 감정은 '그저 그런 날', 키워드 없음
   const fallback = {
     title: content.trim().split('\n')[0].slice(0, 20),
     emotion: '그저 그런 날',
+    keywords: [],
     fromAI: false, // AI 분석 실패 표시 (프론트에서 안내용)
   };
 
@@ -22,10 +23,24 @@ async function analyzeDiary(content) {
   if (!apiKey) return fallback; // 키가 없으면 바로 기본값
 
   // Gemini에게 보낼 지시문(프롬프트)
-  const prompt = `너는 일기 분석가다. 아래 일기를 읽고 JSON으로만 답해라. 다른 말은 절대 하지 마라.
-형식: {"title": "감성적인 한 줄 제목 (한국어, 15자 이내)", "emotion": "아래 9개 중 정확히 하나"}
-감정 목록: ${EMOTIONS.join(', ')}
-애매하면 emotion은 "그저 그런 날"로 해라.
+  // 제목은 단순 요약이 아니라, 일기책의 소제목 같은 서정적인 한 줄이 되도록 규칙과 예시를 줌
+  const prompt = `너는 일기에 제목을 붙여 주는 작가다. 아래 일기를 읽고 JSON으로만 답해라. 다른 말은 절대 하지 마라.
+형식: {"title": "한 줄 제목", "emotion": "아래 9개 중 정확히 하나", "keywords": ["키워드", ...]}
+
+[제목 규칙]
+- 한국어 6~16자. 일기책의 소제목처럼 서정적이고 여운이 남게.
+- 일기 속의 구체적인 장면이나 사물 하나를 빌려서 쓸 것.
+- 좋은 예: "창밖만 보던 날", "바람이 내 편이던 날", "같은 야경, 빈 옆자리", "심장 소리만 기억나는 오후"
+- 나쁜 예(피할 것): "과제를 끝낸 날"(단순 요약), "행복했던 하루"(뻔함), "운명 같은 영혼의 시간"(과장)
+
+[감정 규칙]
+- 감정 목록: ${EMOTIONS.join(', ')}
+- 애매하면 emotion은 "그저 그런 날"로 해라.
+
+[키워드 규칙]
+- 일기의 핵심을 나타내는 명사 1~3개. (예: "여자친구", "여행", "시험", "카페", "쇼핑")
+- 한 키워드는 1~2단어, "#" 없이. 일기에 없는 내용으로 만들지 말 것.
+- 마땅한 키워드가 없으면 빈 배열 [].
 
 일기:
 ${content}`;
@@ -37,9 +52,13 @@ ${content}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        // JSON만 답하도록 강제하는 옵션
-        generationConfig: { responseMimeType: 'application/json' },
+        // JSON만 답하도록 강제 + thinking(생각 시간) 끄기 -> 짧은 작업이라 품질 손해 없이 훨씬 빨라짐
+        generationConfig: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
+      signal: AbortSignal.timeout(20000), // 20초 안에 답이 없으면 포기 -> fallback으로 저장
     });
 
     if (!res.ok) {
@@ -58,11 +77,72 @@ ${content}`;
     const emotion = EMOTIONS.includes(parsed.emotion) ? parsed.emotion : '그저 그런 날';
     const title = (parsed.title || fallback.title).slice(0, 30);
 
-    return { title, emotion, fromAI: true };
+    // 키워드 정리: 배열인지 확인, # 제거, 너무 긴 것 자르기, 최대 3개
+    const keywords = Array.isArray(parsed.keywords)
+      ? parsed.keywords.map((k) => String(k).replace(/^#/, '').trim().slice(0, 12)).filter(Boolean).slice(0, 3)
+      : [];
+
+    return { title, emotion, keywords, fromAI: true };
   } catch (err) {
     console.error('Gemini 분석 실패:', err.message);
     return fallback;
   }
 }
 
-module.exports = { analyzeDiary, EMOTIONS };
+/**
+ * 여러 일기를 모아 한 편의 서정적인 회고를 써 준다.
+ * title: "카페 어니언 성수" / "이 근처" / "2026년 6월" 같은 묶음 이름
+ * diaryLines: "- (날짜, 감정) 제목: 본문 일부" 형태의 문자열 배열
+ * 실패하면 null (호출한 쪽에서 안내 처리)
+ */
+async function writeStory(title, diaryLines) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = `너는 흩어진 일기들을 모아 한 편의 회고를 써 주는 작가다. 아래는 "${title}"에 대한 나의 일기들이다.
+이 기억들을 읽고 1인칭("나")의 회고를 한국어 3~5문장으로 써라. JSON으로만 답해라.
+형식: {"story": "회고 본문"}
+
+[규칙]
+- 가장 중요: 일기에 없는 사건·사람·장소·날씨·사물을 절대 지어내지 말 것. 아래 일기에 적힌 것만 재료로 쓸 것.
+- 확실하지 않은 것은 구체적으로 말하지 말 것. (일기에 "비"가 없으면 비 얘기 금지)
+- 날짜나 횟수를 나열하지 말 것. 감정이 어떻게 흘러왔는지가 느껴지게.
+- 일기 속 구체적인 장면을 한두 개 그대로 빌려 올 것 (바꾸거나 부풀리지 말 것).
+- 담백하고 서정적으로. 과장된 시어나 교훈조("~해야겠다")는 금지.
+- 슬픈 기억이 있으면 억지로 밝게 끝내지 말 것.
+
+일기들:
+${diaryLines.join('\n')}`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        // temperature 낮춤(차분하게) + thinking 끄기(속도. 일기 20~30개도 수 초면 됨)
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.6,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+      signal: AbortSignal.timeout(30000), // 30초 안에 답이 없으면 포기 -> 안내 메시지
+    });
+    if (!res.ok) {
+      console.error('Gemini 회고 오류:', res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    return (parsed.story || '').trim() || null;
+  } catch (err) {
+    console.error('Gemini 회고 실패:', err.message);
+    return null;
+  }
+}
+
+module.exports = { analyzeDiary, writeStory, EMOTIONS };

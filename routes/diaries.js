@@ -3,8 +3,9 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('node:crypto');
 const db = require('../db');
-const { analyzeDiary, EMOTIONS } = require('../ai');
+const { analyzeDiary, writeStory, EMOTIONS } = require('../ai');
 
 const router = express.Router();
 
@@ -64,6 +65,40 @@ router.get('/oembed', async (req, res) => {
   }
 });
 
+// ---------- AI 회고: 여러 기억을 한 편의 글로 ----------
+// [POST] /api/diaries/story  body: { title: "묶음 이름", ids: [일기 id들] }
+// 같은 묶음이면 캐시(stories 테이블)에서 바로 돌려줌
+router.post('/story', async (req, res) => {
+  const { title, ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: '일기 목록이 필요합니다.' });
+
+  // 내 일기만 골라옴 (남의 일기 id를 보내도 무시됨)
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db
+    .prepare(`SELECT * FROM diaries WHERE id IN (${placeholders}) AND user_id = ? ORDER BY diary_date`)
+    .all(...ids, req.session.userId);
+  if (rows.length === 0) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
+
+  // 너무 많으면 최신 30개만 사용 (프롬프트가 길어지는 것 방지)
+  const used = rows.length > 30 ? rows.slice(-30) : rows;
+
+  // 캐시 키: 제목 + 각 일기의 id/감정/제목 -> 일기가 추가/수정되면 키가 바뀌어 새로 생성됨
+  const key = crypto.createHash('sha1')
+    .update((title || '') + '|' + used.map((r) => `${r.id}:${r.emotion}:${r.ai_title}`).join('|'))
+    .digest('hex');
+
+  const hit = db.prepare('SELECT story FROM stories WHERE user_id = ? AND cache_key = ?').get(req.session.userId, key);
+  if (hit) return res.json({ story: hit.story, cached: true });
+
+  // 일기당 앞 150자를 AI에게 전달 (너무 짧으면 맥락 누락, 너무 길면 프롬프트 낭비)
+  const lines = used.map((r) => `- (${r.diary_date}, ${r.emotion}) ${r.ai_title || ''}: ${r.content.slice(0, 150)}`);
+  const story = await writeStory(title || '이 곳', lines);
+  if (!story) return res.status(503).json({ error: 'AI가 이야기를 만들지 못했어요. 잠시 후 다시 시도해 주세요.' });
+
+  db.prepare('INSERT INTO stories (user_id, cache_key, story) VALUES (?, ?, ?)').run(req.session.userId, key, story);
+  res.json({ story, cached: false });
+});
+
 // ---------- 일기 목록 ----------
 // [GET] /api/diaries - 내 일기 전부 (지도/캘린더에서 사용)
 router.get('/', (req, res) => {
@@ -75,7 +110,13 @@ router.get('/', (req, res) => {
 
 // ---------- 일기 작성 ----------
 // [POST] /api/diaries  (사진이 있을 수 있어서 multipart/form-data 로 받음)
-router.post('/', upload.single('photo'), async (req, res) => {
+// upload를 직접 감싸서, 용량 초과 등 업로드 에러를 "조용한 누락" 대신 명확한 에러로 돌려줌
+router.post('/', (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: '사진 업로드에 실패했어요. 5MB 이하의 이미지만 올릴 수 있습니다.' });
+    next();
+  });
+}, async (req, res) => {
   const { place_name, address, lat, lng, content, music_url, music_title, music_thumbnail, diary_date } = req.body;
 
   // 필수 값 검증
@@ -89,13 +130,14 @@ router.post('/', upload.single('photo'), async (req, res) => {
   const result = db
     .prepare(`INSERT INTO diaries
       (user_id, place_name, address, lat, lng, content, ai_title, emotion,
-       photo_path, music_url, music_title, music_thumbnail, diary_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+       photo_path, music_url, music_title, music_thumbnail, keywords, diary_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(
       req.session.userId, place_name, address || '', Number(lat), Number(lng),
       content, ai.title, ai.emotion,
       req.file ? '/uploads/' + req.file.filename : null,
       music_url || null, music_title || null, music_thumbnail || null,
+      ai.keywords && ai.keywords.length ? ai.keywords.join(',') : null, // 키워드 (쉼표 구분)
       diary_date
     );
 

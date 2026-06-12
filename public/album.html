@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>감정 기록 - 앨범</title>
+  <!-- 폰트: 제목용 Jua(둥근 귀여운), 본문용 Noto Sans KR(깔끔한 고딕) -->
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <!-- 로고/내 정보는 common.js의 renderNav()가 그려 넣음 (앨범 창은 그 둘만 보임) -->
+
+  <div class="page wide">
+    <h1>앨범</h1>
+    <p class="hint" style="margin:-14px 0 18px;">사진이 담긴 기억들 — 사진을 누르면 그 기억으로 가요</p>
+
+    <!-- 내용은 gallery.js가 채움 -->
+    <div id="galBody"></div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/gallery.js"></script>
+</body>
+</html>

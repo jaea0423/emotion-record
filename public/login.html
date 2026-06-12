@@ -4,27 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>감정 기록 - 로그인</title>
-  <!-- 손글씨 폰트: 제목용(나눔펜), 본문용(개구) -->
-  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu:wght@300;400;700&display=swap" rel="stylesheet" />
+  <!-- 폰트: 제목용 Jua(둥근 귀여운), 본문용 Noto Sans KR(깔끔한 고딕) -->
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <div class="auth-wrap">
-    <!-- 손그림 낙서들 (별, 하트, 화살표) -->
-    <svg class="doodle" style="top:-26px; right:-8px; transform:rotate(12deg);" width="54" height="54" viewBox="0 0 54 54">
-      <path d="M27 6 l5 14 15 1 -12 9 5 15 -13 -9 -13 9 5 -15 -12 -9 15 -1 Z" fill="none" stroke="#C9A86A" stroke-width="2.5" stroke-linejoin="round"/>
-    </svg>
-    <svg class="doodle" style="top:120px; left:-34px; transform:rotate(-14deg);" width="44" height="44" viewBox="0 0 44 44">
-      <path d="M22 36 C 8 26, 4 14, 12 9 c 6 -4 10 1 10 5 c 0 -4 4 -9 10 -5 c 8 5 4 17 -10 27 Z" fill="none" stroke="#E08AA4" stroke-width="2.5"/>
-    </svg>
-    <svg class="doodle" style="bottom:-36px; right:14px;" width="60" height="30" viewBox="0 0 60 30">
-      <path d="M4 22 q 10 -16 22 -6 q 12 10 24 -8 m -8 0 l 9 -1 1 8" fill="none" stroke="#8FAE8B" stroke-width="2.4" stroke-linecap="round"/>
-    </svg>
-
     <h1>감정 기록</h1>
     <p class="sub">하루의 감정이 장소와 날짜에 새겨집니다 ✎</p>
 
-    <div class="card taped sketch">
+    <div class="card">
       <!-- 로그인 / 회원가입 탭 -->
       <div class="tabs">
         <button id="tabLogin" class="active">로그인</button>

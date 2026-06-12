@@ -1,11 +1,23 @@
 // map.js - 지도 메인 페이지: 표정 스티커 마커, 이 곳의 기억, 일기 상세 + 수정
 let map, clusterer, diaries = [], places = {};
+const markerPlace = new Map(); // 마커 -> 장소 데이터 (클러스터의 대표 감정 계산용)
+let lastClusterMarkers = null;   // 마지막으로 클릭한 묶음 (상세에서 "뒤로" 갈 때 사용)
+let emotionFilter = null;        // 왼쪽 목록에서 고른 감정 (null이면 전체 표시)
+let keywordFilter = null;        // 왼쪽 목록에서 고른 키워드 (null이면 전체 표시)
+const markerSize = new Map();    // 마커 -> 픽셀 크기 (겹침 판정용)
 let firstLoad = true; // 처음 한 번만 지도 위치를 자동으로 잡기 위한 플래그
 
 // ---------- 시작 ----------
 (async function init() {
   await renderNav('map');
-  renderLegend();
+  showPlaceholder(); // 시작 화면: 안내 문구
+
+  // 키워드 페이지에서 "#키워드"를 누르고 넘어온 경우 필터를 이어받음
+  const jump = sessionStorage.getItem('jumpKeyword');
+  if (jump) {
+    keywordFilter = jump;
+    sessionStorage.removeItem('jumpKeyword');
+  }
 
   try {
     await loadKakao(); // 카카오 SDK 로딩
@@ -21,19 +33,69 @@ let firstLoad = true; // 처음 한 번만 지도 위치를 자동으로 잡기 
     level: 8,
   });
 
-  // 클러스터러: 지도를 축소하면 가까운 마커들을 숫자 하나로 합쳐 줌
-  // (스타일도 손글씨 테마에 맞게 종이색 + 펜 테두리로)
+  // 최대 축소 제한: 레벨 12 = 축척 32km (한반도가 화면에 꽉 차는 정도)
+  map.setMaxLevel(12);
+
+  // 이동 범위 제한: "화면에 보이는 영역"이 한국 영토 박스를 못 벗어나게
+  // (중심점이 아니라 화면 가장자리 기준이라, 어느 확대 단계에서든 빈 바다로 못 나감)
+  // 박스: 백령도~독도(경도 123.9~132.3), 마라도~휴전선 위(위도 32.6~39.2)
+  const MAXB = { sw: { lat: 32.6, lng: 123.9 }, ne: { lat: 39.2, lng: 132.3 } };
+  function clampView() {
+    const b = map.getBounds();
+    const sw = b.getSouthWest(), ne = b.getNorthEast();
+    const c = map.getCenter();
+    const halfH = (ne.getLat() - sw.getLat()) / 2; // 화면 세로 절반 (도 단위)
+    const halfW = (ne.getLng() - sw.getLng()) / 2; // 화면 가로 절반
+
+    // 중심이 움직일 수 있는 허용 범위 = 박스 안쪽으로 화면 절반만큼 들어온 곳
+    const latMin = MAXB.sw.lat + halfH, latMax = MAXB.ne.lat - halfH;
+    const lngMin = MAXB.sw.lng + halfW, lngMax = MAXB.ne.lng - halfW;
+
+    // 화면이 박스보다 크면(끝까지 축소한 상태) 박스 한가운데에 고정
+    const lat = latMin > latMax ? (MAXB.sw.lat + MAXB.ne.lat) / 2 : Math.max(latMin, Math.min(latMax, c.getLat()));
+    const lng = lngMin > lngMax ? (MAXB.sw.lng + MAXB.ne.lng) / 2 : Math.max(lngMin, Math.min(lngMax, c.getLng()));
+
+    if (lat !== c.getLat() || lng !== c.getLng()) map.setCenter(new kakao.maps.LatLng(lat, lng));
+  }
+  kakao.maps.event.addListener(map, 'center_changed', clampView); // 드래그 중에도
+  kakao.maps.event.addListener(map, 'zoom_changed', clampView);   // 확대/축소 직후에도
+
+  // 클러스터러: 지도를 축소하면 가까운 마커들을 하나로 합침.
+  // 단, 기본 모양(숫자만 있는 원)은 쓰지 않고, 아래 'clustered' 이벤트에서
+  // "대표 감정 표정 + 개수 뱃지"로 바꿔치기함 -> 숫자만 보이는 경우가 없음
   clusterer = new kakao.maps.MarkerClusterer({
     map,
     averageCenter: true,
-    minLevel: 10, // 전국 수준(레벨 10 이상)으로 축소했을 때만 합치기
-    styles: [{
-      width: '66px', height: '66px',
-      background: '#FFFDF6', border: '3px solid #5B4A3A', borderRadius: '50%',
-      color: '#5B4A3A', textAlign: 'center', lineHeight: '60px',
-      fontFamily: 'Gaegu', fontWeight: '700', fontSize: '22px',
-      boxShadow: '2px 3px 4px rgba(0,0,0,.2)',
-    }],
+    minLevel: 1,   // 모든 확대 단계에서 동작: 겹칠 만큼 가까우면 항상 합쳐짐
+    gridSize: 95,  // 이 픽셀 거리 안의 마커들을 하나로 묶음 (마커가 커서 넉넉하게)
+    disableClickZoom: true, // 클릭 시 자동 확대 끄기 (대신 아래에서 기억 목록을 보여 줌)
+  });
+
+  // 묶음(클러스터)을 클릭하면 그 안의 모든 기억 목록을 패널로 보여 줌
+  kakao.maps.event.addListener(clusterer, 'clusterclick', (cluster) => {
+    showCluster(cluster.getMarkers());
+  });
+
+  // 클러스터가 만들어질 때마다 내용물을 표정 스티커로 교체
+  kakao.maps.event.addListener(clusterer, 'clustered', (clusters) => {
+    for (const c of clusters) {
+      // 이 묶음에 합쳐진 모든 장소의 일기를 모아서 대표 감정을 계산
+      // (빈도 우선, 동률이면 EMOTION_PRIORITY 순서 = 긍정 우선)
+      const clusterMarkers = c.getMarkers();
+      const list = clusterMarkers.flatMap((m) => (markerPlace.get(m) || { list: [] }).list);
+      if (!list.length) continue;
+      const emo = dominantEmotion(list);
+      const size = Math.min(80 + list.length * 6, 140); // 일기가 많을수록 큰 표정
+
+      // HTML 문자열 대신 실제 요소를 만들어서 클릭 이벤트를 "직접" 단다.
+      // (setContent로 내용물을 갈아끼우면 카카오가 달아 둔 클릭 처리가
+      //  사라지는 경우가 있어서, 어떤 묶음은 클릭이 안 되는 문제가 있었음)
+      const el = document.createElement('div');
+      el.style.cssText = 'cursor:pointer; filter:drop-shadow(2px 3px 3px rgba(0,0,0,.25));';
+      el.innerHTML = faceSVG(emo, size, list.length);
+      el.onclick = (e) => { e.stopPropagation(); showCluster(clusterMarkers); };
+      c.getClusterMarker().setContent(el);
+    }
   });
 
   await loadDiaries();
@@ -55,23 +117,35 @@ window.applyFilter = async () => {
 // ---------- 일기 불러와서 마커 그리기 ----------
 async function loadDiaries() {
   diaries = await api('/api/diaries');
-  const visible = filterDiaries(diaries); // 기간 필터 적용 (common.js)
+  const periodVisible = filterDiaries(diaries); // 기간 필터 적용 (common.js)
+  renderEmotionPanel(periodVisible); // 왼쪽 감정 목록 갱신 (개수는 기간 기준)
+
+  // 감정/키워드 필터: 왼쪽 패널에서 고른 것만 지도에 표시 (둘 다 고르면 둘 다 만족해야 함)
+  let visible = emotionFilter
+    ? periodVisible.filter((d) => d.emotion === emotionFilter)
+    : periodVisible;
+  if (keywordFilter) {
+    visible = visible.filter((d) => (d.keywords || '').split(',').includes(keywordFilter));
+  }
 
   // 같은 장소의 일기들을 하나로 묶기 (장소명 + 좌표 4자리 반올림을 키로 사용)
   places = {};
   for (const d of visible) {
     const key = d.place_name + '|' + d.lat.toFixed(4) + '|' + d.lng.toFixed(4);
-    if (!places[key]) places[key] = { name: d.place_name, address: d.address, lat: d.lat, lng: d.lng, list: [] };
+    if (!places[key]) places[key] = { key, name: d.place_name, address: d.address, lat: d.lat, lng: d.lng, list: [] };
     places[key].list.push(d);
   }
 
+  // 이전에 그려 둔 마커들을 먼저 지움 (필터 변경/수정 후 다시 그릴 때)
+  clusterer.clear();
+  markerPlace.clear();
+  markerSize.clear();
   const markers = [];
-  const bounds = new kakao.maps.LatLngBounds();
 
   for (const key in places) {
     const p = places[key];
     const emotion = dominantEmotion(p.list); // 대표 감정 (가장 많이 나온 것)
-    const size = Math.min(50 + p.list.length * 8, 90); // 일기가 많을수록 큰 마커 (최대 90px)
+    const size = Math.min(72 + p.list.length * 10, 130); // 일기가 많을수록 큰 마커 (최대 130px)
 
     // 표정 스티커 SVG를 마커 이미지로 사용 (faceSVG는 common.js)
     // 일기가 2개 이상이면 숫자 뱃지가 같이 그려짐
@@ -84,14 +158,15 @@ async function loadDiaries() {
 
     const pos = new kakao.maps.LatLng(p.lat, p.lng);
     const marker = new kakao.maps.Marker({ position: pos, image, title: p.name });
-    kakao.maps.event.addListener(marker, 'click', () => showPlace(key));
+    // 클릭하면 화면에서 겹쳐 있는 마커들을 찾아 같이 보여 줌
+    kakao.maps.event.addListener(marker, 'click', () => handleMarkerClick(marker));
 
+    markerPlace.set(marker, p); // 클러스터 표정 계산을 위해 기억해 둠
+    markerSize.set(marker, size); // 겹침 판정용
     markers.push(marker);
-    bounds.extend(pos);
   }
 
-  clusterer.clear();
-  clusterer.addMarkers(markers);
+  clusterer.addMarkers(markers); // 한꺼번에 올리면 클러스터러가 알아서 합쳐 줌
 
   // 처음 들어왔을 때: 가장 최근 일기가 있는 곳을 중심으로 확대해서 시작
   // (전체 기록 범위로 맞추면 전국이 다 보일 만큼 축소돼서 허전해 보임)
@@ -107,6 +182,64 @@ async function loadDiaries() {
   }
 }
 
+// ---------- 마커 클릭: 겹쳐 있으면 함께 보여 주기 ----------
+// 마커가 커서 서로 겹치면 아래 깔린 마커는 클릭이 안 됨.
+// 그래서 클릭된 마커와 화면상(픽셀 기준) 겹쳐 있는 마커들을 찾아
+// 하나라도 있으면 그 기억들을 전부 시간순으로 합쳐서 보여 줌.
+function handleMarkerClick(clicked) {
+  const proj = map.getProjection(); // 좌표(위도/경도) -> 화면 픽셀 변환기
+  const cp = proj.containerPointFromCoords(clicked.getPosition());
+  const cr = (markerSize.get(clicked) || 50) / 2; // 클릭된 마커의 반지름
+
+  const group = [];
+  for (const [m] of markerPlace) {
+    if (m !== clicked && !m.getMap()) continue; // 클러스터에 숨겨진 마커는 제외
+    const p2 = proj.containerPointFromCoords(m.getPosition());
+    const r2 = (markerSize.get(m) || 50) / 2;
+    const dist = Math.hypot(cp.x - p2.x, cp.y - p2.y); // 두 마커 중심 사이 픽셀 거리
+    if (dist < (cr + r2) * 0.8) group.push(m); // 반지름 합의 80% 안이면 "겹침"
+  }
+
+  if (group.length <= 1) showPlace(markerPlace.get(clicked).key); // 안 겹치면 평소처럼
+  else showCluster(group); // 겹치면 합쳐서 보여 줌
+}
+
+// ---------- 사이드 패널: 묶음(클러스터) 안의 기억들 ----------
+function showCluster(clusterMarkers) {
+  lastClusterMarkers = clusterMarkers;
+  const placeList = clusterMarkers.map((m) => markerPlace.get(m)).filter(Boolean);
+  const list = placeList.flatMap((p) => p.list);
+  if (!list.length) return closePanel();
+  const sorted = [...list].sort((a, b) => a.diary_date.localeCompare(b.diary_date)); // 시간순 (오래된 것부터)
+
+  const body = document.getElementById('panelBody');
+  body.innerHTML = `
+    <h2>이 근처의 기억</h2>
+    <p class="addr">장소 ${placeList.length}곳 · 기억 ${list.length}개</p>
+    <button class="btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳들의 이야기</button>
+    <div class="ai-story" id="storyBox" style="display:none;"></div>
+    ${sorted.map((d) => `
+      <div class="diary-item" data-id="${d.id}">
+        <div class="d-row">
+          <div class="d-face">${faceSVG(d.emotion, 46, 0)}</div>
+          <div>
+            <span class="d-date">${prettyDate(d.diary_date)} · ${esc(d.place_name)}</span>
+            <p class="d-title">${esc(d.ai_title) || '(제목 없음)'}</p>
+          </div>
+        </div>
+      </div>`).join('')}
+  `;
+  wireStory('이 근처', sorted.map((d) => d.id)); // ✨ 버튼 연결 (common.js)
+  // 일기 클릭 -> 상세 (뒤로 가면 이 목록으로 돌아옴)
+  body.querySelectorAll('.diary-item').forEach((el) => {
+    el.onclick = () => {
+      const d = diaries.find((x) => x.id == el.dataset.id);
+      showDetail(d, '__cluster__');
+    };
+  });
+  openPanel();
+}
+
 // ---------- 사이드 패널: 이 곳의 기억 ----------
 function showPlace(key) {
   const p = places[key];
@@ -115,20 +248,23 @@ function showPlace(key) {
 
   const body = document.getElementById('panelBody');
   body.innerHTML = `
-    <h2>${p.name}</h2>
-    <p class="addr">${p.address || ''} · 이 곳의 기억 ${p.list.length}개</p>
+    <h2>${esc(p.name)}</h2>
+    <p class="addr">${esc(p.address) || ''} · 이 곳의 기억 ${p.list.length}개</p>
+    ${p.list.length >= 2 ? `<button class="btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳의 이야기</button>` : ''}
+    <div class="ai-story" id="storyBox" style="display:none;"></div>
     ${sorted.map((d) => `
       <div class="diary-item" data-id="${d.id}">
         <div class="d-row">
           <div class="d-face">${faceSVG(d.emotion, 46, 0)}</div>
           <div>
             <span class="d-date">${prettyDate(d.diary_date)}</span>
-            <p class="d-title">${d.ai_title || '(제목 없음)'}</p>
+            <p class="d-title">${esc(d.ai_title) || '(제목 없음)'}</p>
           </div>
         </div>
       </div>`).join('')}
-    <button class="btn main" style="width:100%; margin-top:16px;" id="writeHereBtn">＋ 이 곳에 새 기억 남기기</button>
+    <button class="btn main" style="width:100%; margin-top:12px;" id="writeHereBtn">＋ 이 곳에 새 기억 남기기</button>
   `;
+  wireStory(p.name, sorted.map((d) => d.id)); // ✨ 버튼 연결 (common.js)
 
   // 각 일기 카드 클릭 -> 상세 보기
   body.querySelectorAll('.diary-item').forEach((el) => {
@@ -169,22 +305,25 @@ function showDetail(d, backKey) {
 
   body.innerHTML = `
     <div class="detail">
-      <button class="back" id="backBtn">← ${backKey ? '장소의 기억으로' : '닫기'}</button>
-      <span class="d-date">${prettyDate(d.diary_date)} · ${d.place_name}</span>
-      <h2 style="margin-top:4px;">${d.ai_title || '(제목 없음)'}</h2>
+      <button class="back" id="backBtn">← ${backKey === '__cluster__' ? '근처의 기억으로' : backKey ? '장소의 기억으로' : '닫기'}</button>
+      <span class="d-date">${prettyDate(d.diary_date)} · ${esc(d.place_name)}</span>
+      <h2 style="margin-top:4px;">${esc(d.ai_title) || '(제목 없음)'}</h2>
       <span class="emo-badge" style="margin-top:10px;">${faceSVG(d.emotion, 28, 0)}${d.emotion}</span>
+      ${d.keywords ? `<div class="kw-chips" style="margin-top:10px;">
+        ${d.keywords.split(',').map((k) => `<button type="button" class="kw-chip" data-kw="${esc(k)}">#${esc(k)}</button>`).join('')}
+      </div>` : ''}
       ${d.photo_path ? `
-        <div class="polaroid"><img src="${d.photo_path}" alt="일기 사진"><div class="cap">${d.place_name}에서</div></div>` : ''}
-      <p class="content">${d.content}</p>
+        <div class="polaroid"><img src="${d.photo_path}" alt="일기 사진"><div class="cap">${esc(d.place_name)}에서</div></div>` : ''}
+      <p class="content">${esc(d.content)}</p>
       ${d.music_title ? `
         <div class="musicbox">
           <div class="art">${d.music_thumbnail ? `<img src="${d.music_thumbnail}" alt="">` : '♪'}</div>
-          <div><div class="mt">${d.music_title}</div></div>
+          <div><div class="mt">${esc(d.music_title)}</div></div>
         </div>` : ''}
       ${musicEmbed}
 
       <label style="margin-top:18px;">제목(요약) 고치기</label>
-      <input id="titleSel" value="${(d.ai_title || '').replace(/"/g, '&quot;')}">
+      <input id="titleSel" value="${esc(d.ai_title)}">
       <div class="row">
         <select id="emoSelect">
           ${EMOTION_LIST.map((e) => `<option ${e === d.emotion ? 'selected' : ''}>${e}</option>`).join('')}
@@ -196,8 +335,20 @@ function showDetail(d, backKey) {
     </div>
   `;
 
-  // 뒤로 가기: 장소 목록으로, 없으면 패널 닫기
-  document.getElementById('backBtn').onclick = () => (backKey ? showPlace(backKey) : closePanel());
+  // 키워드 칩 클릭 -> 그 키워드로 지도 필터
+  body.querySelectorAll('.detail .kw-chip').forEach((el) => {
+    el.onclick = async () => {
+      keywordFilter = el.dataset.kw;
+      closePanel();
+      await loadDiaries();
+    };
+  });
+
+  // 뒤로 가기: 클러스터 목록 / 장소 목록 / 닫기
+  document.getElementById('backBtn').onclick = () => {
+    if (backKey === '__cluster__') return showCluster(lastClusterMarkers || []);
+    backKey ? showPlace(backKey) : closePanel();
+  };
 
   // 제목 + 감정 수정 (한 번의 PUT으로 같이 저장)
   document.getElementById('editSave').onclick = async () => {
@@ -224,16 +375,59 @@ function showDetail(d, backKey) {
   openPanel();
 }
 
-// ---------- 패널 열기/닫기, 범례, 빈 화면 ----------
-function openPanel() { document.getElementById('panel').classList.add('open'); map && map.relayout(); }
-function closePanel() { document.getElementById('panel').classList.remove('open'); map && map.relayout(); }
+// ---------- 패널 (항상 열려 있음) ----------
+// "닫기"는 패널을 없애는 대신 안내 문구 상태로 되돌림
+function openPanel() { map && map.relayout(); }
+function closePanel() { showPlaceholder(); }
 document.getElementById('panelClose').onclick = closePanel;
 
-// 범례: 9가지 감정 표정 + 이름
-function renderLegend() {
-  document.getElementById('legend').innerHTML = EMOTION_LIST
-    .map((e) => `<span class="l-item">${faceSVG(e, 26, 0)}${e}</span>`)
-    .join('');
+// 아무것도 안 눌렀을 때 보여 주는 안내 문구
+function showPlaceholder() {
+  document.getElementById('panelBody').innerHTML = `
+    <div class="panel-placeholder">
+      <div class="pp-face">${faceSVG('기쁨', 64, 0)}</div>
+      <p>지도에서 감정을 클릭해 보세요</p>
+      <span class="hint">장소마다 쌓인 기억들이 여기에 나타나요</span>
+    </div>`;
+}
+
+// 왼쪽 고정 패널: 감정 목록 + (현재 기간의) 기억 개수
+// 감정을 클릭하면 그 감정의 마커만 지도에 표시 (다시 클릭하면 해제)
+function renderEmotionPanel(visible) {
+  const counts = {};
+  for (const d of visible) counts[d.emotion] = (counts[d.emotion] || 0) + 1;
+  const box = document.getElementById('emotionList');
+  box.innerHTML = `
+    <h2 class="el-title">감정 목록</h2>
+    <p class="hint" style="margin:-6px 0 10px;">감정을 누르면 그 감정의 기억만 지도에 보여요</p>
+    ${EMOTION_LIST.map((e) => `
+      <div class="el-row ${emotionFilter === e ? 'on' : ''}" data-emo="${e}">
+        ${faceSVG(e, 34, 0)}
+        <span class="el-name">${e}</span>
+        <span class="el-cnt">${counts[e] || 0}</span>
+      </div>`).join('')}`;
+
+  box.querySelectorAll('.el-row').forEach((el) => {
+    el.onclick = async () => {
+      const emo = el.dataset.emo;
+      emotionFilter = (emotionFilter === emo) ? null : emo; // 같은 걸 또 누르면 해제
+      closePanel();
+      await loadDiaries(); // 마커 + 목록 강조 다시 그림
+    };
+  });
+
+  // ----- 키워드 필터가 걸려 있으면 맨 위에 "#키워드 ✕" 칩 표시 (누르면 해제) -----
+  if (keywordFilter) {
+    const fl = document.createElement('div');
+    fl.style.margin = '0 0 14px';
+    fl.innerHTML = `<button type="button" class="kw-chip on" id="kwClear">#${esc(keywordFilter)} 필터 중 ✕</button>`;
+    box.prepend(fl);
+    document.getElementById('kwClear').onclick = async () => {
+      keywordFilter = null;
+      closePanel();
+      await loadDiaries();
+    };
+  }
 }
 
 // 기록이 하나도 없을 때 (hasAny=true면 "이 기간에" 없는 것)
