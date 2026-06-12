@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>감정 기록 - 지도</title>
+  <!-- 손글씨 폰트: 제목용(나눔펜), 본문용(개구) -->
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <!-- 상단 내비게이션 + 기간 필터는 common.js의 renderNav()가 그려 넣음 -->
+
+  <div class="map-layout">
+    <div id="map"></div>
+
+    <!-- 감정 표정 범례 -->
+    <div class="legend" id="legend"></div>
+
+    <!-- 마커 클릭 시 열리는 사이드 패널 -->
+    <aside class="panel" id="panel">
+      <button class="close" id="panelClose">✕</button>
+      <div id="panelBody"></div>
+    </aside>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/map.js"></script>
+</body>
+</html>

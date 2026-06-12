@@ -1,0 +1,13 @@
+# 비밀 키 (절대 커밋 금지!)
+.env
+
+# 라이브러리 (npm install로 다시 받을 수 있음)
+node_modules/
+
+# 데이터베이스 + 업로드 사진 (개인 데이터)
+memory.db
+uploads/
+
+# 운영체제 잡파일
+.DS_Store
+Thumbs.db

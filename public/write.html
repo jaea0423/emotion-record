@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>감정 기록 - 기록하기</title>
+  <!-- 손글씨 폰트: 제목용(나눔펜), 본문용(개구) -->
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <!-- 상단 내비게이션 + 기간 필터는 common.js의 renderNav()가 그려 넣음 -->
+
+  <div class="page">
+    <h1>오늘, 이 곳의 기억</h1>
+
+    <form id="writeForm" class="card taped pink sketch2">
+      <!-- 장소 검색 -->
+      <label>어디에 있었나요?</label>
+      <div class="check-row">
+        <input id="placeQuery" placeholder="장소 이름으로 검색 (예: 스타벅스 성수)" />
+        <button type="button" class="btn" id="searchBtn">검색</button>
+      </div>
+      <div class="place-results" id="placeResults" style="display:none;"></div>
+      <div class="selected-place" id="selectedPlace" style="display:none;"></div>
+
+      <!-- 날짜 -->
+      <label>언제였나요?</label>
+      <input id="diaryDate" type="date" />
+
+      <!-- 일기 본문 -->
+      <label>그 곳에서 어떤 일이 있었나요?</label>
+      <textarea id="content" rows="8" placeholder="일기를 적으면 AI가 제목과 감정을 찾아 지도에 남겨 드려요."></textarea>
+
+      <!-- 사진 (선택) -->
+      <label>이 순간을 남길 수 있는 사진이 있나요? <span class="hint">(선택)</span></label>
+      <input id="photo" type="file" accept="image/*" />
+
+      <!-- 음악 (선택) -->
+      <label>지금 이 순간과 가장 어울리는 노래는 무엇인가요? <span class="hint">(선택)</span></label>
+      <div class="check-row">
+        <input id="musicUrl" placeholder="유튜브 또는 스포티파이 링크 붙여넣기" />
+        <button type="button" class="btn" id="musicBtn">불러오기</button>
+      </div>
+      <div class="music-preview" id="musicPreview" style="display:none;">
+        <img id="musicThumb" alt="앨범 표지" />
+        <span id="musicTitle"></span>
+      </div>
+
+      <button class="btn main" style="width:100%; margin-top:24px;" id="submitBtn">기억으로 남기기 ✎</button>
+      <p class="error" id="formErr"></p>
+    </form>
+
+    <!-- 저장 완료 후 결과 표시 영역 (제목/감정 즉시 수정 가능) -->
+    <div class="card taped sketch" id="resultCard" style="display:none; margin-top:28px; text-align:center;"></div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/write.js"></script>
+</body>
+</html>

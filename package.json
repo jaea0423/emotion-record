@@ -1,0 +1,20 @@
+{
+  "name": "emotion-record",
+  "version": "0.1.0",
+  "description": "감정 기록 - 일기가 지도와 달력에 감정 표정으로 새겨지는 사이트",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}

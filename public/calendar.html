@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>감정 기록 - 날짜별</title>
+  <!-- 손글씨 폰트: 제목용(나눔펜), 본문용(개구) -->
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <!-- 상단 내비게이션 + 기간 필터는 common.js의 renderNav()가 그려 넣음 -->
+
+  <div class="page">
+    <h1>날짜로 보는 기억</h1>
+
+    <!-- 달 이동 -->
+    <div class="cal-head">
+      <button id="prevBtn">◀</button>
+      <strong id="calTitle"></strong>
+      <button id="nextBtn">▶</button>
+    </div>
+
+    <!-- 달력 격자 (기록 있는 날은 칸 자체가 얼굴이 됨) -->
+    <div class="cal-grid" id="calGrid"></div>
+
+    <!-- 날짜 클릭 시 "이 날의 기억" 목록 -->
+    <div class="day-list" id="dayList"></div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/calendar.js"></script>
+</body>
+</html>
