@@ -1,5 +1,6 @@
 // map.js - 지도 메인 페이지: 표정 스티커 마커, 이 곳의 기억, 일기 상세 + 수정
 let map, clusterer, diaries = [], places = {};
+let firstLoad = true; // 처음 한 번만 지도 위치를 자동으로 잡기 위한 플래그
 
 // ---------- 시작 ----------
 (async function init() {
@@ -25,12 +26,12 @@ let map, clusterer, diaries = [], places = {};
   clusterer = new kakao.maps.MarkerClusterer({
     map,
     averageCenter: true,
-    minLevel: 7, // 지도 레벨 7부터 합치기 시작
+    minLevel: 10, // 전국 수준(레벨 10 이상)으로 축소했을 때만 합치기
     styles: [{
-      width: '52px', height: '52px',
-      background: '#FFFDF6', border: '2px solid #5B4A3A', borderRadius: '50%',
-      color: '#5B4A3A', textAlign: 'center', lineHeight: '49px',
-      fontFamily: 'Gaegu', fontWeight: '700', fontSize: '17px',
+      width: '66px', height: '66px',
+      background: '#FFFDF6', border: '3px solid #5B4A3A', borderRadius: '50%',
+      color: '#5B4A3A', textAlign: 'center', lineHeight: '60px',
+      fontFamily: 'Gaegu', fontWeight: '700', fontSize: '22px',
       boxShadow: '2px 3px 4px rgba(0,0,0,.2)',
     }],
   });
@@ -70,7 +71,7 @@ async function loadDiaries() {
   for (const key in places) {
     const p = places[key];
     const emotion = dominantEmotion(p.list); // 대표 감정 (가장 많이 나온 것)
-    const size = Math.min(34 + p.list.length * 6, 58); // 일기가 많을수록 큰 마커 (최대 58px)
+    const size = Math.min(50 + p.list.length * 8, 90); // 일기가 많을수록 큰 마커 (최대 90px)
 
     // 표정 스티커 SVG를 마커 이미지로 사용 (faceSVG는 common.js)
     // 일기가 2개 이상이면 숫자 뱃지가 같이 그려짐
@@ -92,9 +93,18 @@ async function loadDiaries() {
   clusterer.clear();
   clusterer.addMarkers(markers);
 
-  // 기록이 있으면 내 기록이 모인 범위로 지도를 자동 조정
-  if (visible.length > 0) map.setBounds(bounds, 60);
-  else showEmpty(diaries.length > 0);
+  // 처음 들어왔을 때: 가장 최근 일기가 있는 곳을 중심으로 확대해서 시작
+  // (전체 기록 범위로 맞추면 전국이 다 보일 만큼 축소돼서 허전해 보임)
+  if (visible.length > 0) {
+    if (firstLoad) {
+      const latest = visible[0]; // API가 최신순으로 정렬해서 보내 줌
+      map.setCenter(new kakao.maps.LatLng(latest.lat, latest.lng));
+      map.setLevel(6); // 동네가 보이는 정도의 확대
+      firstLoad = false;
+    }
+  } else {
+    showEmpty(diaries.length > 0);
+  }
 }
 
 // ---------- 사이드 패널: 이 곳의 기억 ----------
@@ -110,7 +120,7 @@ function showPlace(key) {
     ${sorted.map((d) => `
       <div class="diary-item" data-id="${d.id}">
         <div class="d-row">
-          <div class="d-face">${faceSVG(d.emotion, 34, 0)}</div>
+          <div class="d-face">${faceSVG(d.emotion, 46, 0)}</div>
           <div>
             <span class="d-date">${prettyDate(d.diary_date)}</span>
             <p class="d-title">${d.ai_title || '(제목 없음)'}</p>
@@ -162,7 +172,7 @@ function showDetail(d, backKey) {
       <button class="back" id="backBtn">← ${backKey ? '장소의 기억으로' : '닫기'}</button>
       <span class="d-date">${prettyDate(d.diary_date)} · ${d.place_name}</span>
       <h2 style="margin-top:4px;">${d.ai_title || '(제목 없음)'}</h2>
-      <span class="emo-badge" style="margin-top:10px;">${faceSVG(d.emotion, 22, 0)}${d.emotion}</span>
+      <span class="emo-badge" style="margin-top:10px;">${faceSVG(d.emotion, 28, 0)}${d.emotion}</span>
       ${d.photo_path ? `
         <div class="polaroid"><img src="${d.photo_path}" alt="일기 사진"><div class="cap">${d.place_name}에서</div></div>` : ''}
       <p class="content">${d.content}</p>
@@ -222,7 +232,7 @@ document.getElementById('panelClose').onclick = closePanel;
 // 범례: 9가지 감정 표정 + 이름
 function renderLegend() {
   document.getElementById('legend').innerHTML = EMOTION_LIST
-    .map((e) => `<span class="l-item">${faceSVG(e, 20, 0)}${e}</span>`)
+    .map((e) => `<span class="l-item">${faceSVG(e, 26, 0)}${e}</span>`)
     .join('');
 }
 

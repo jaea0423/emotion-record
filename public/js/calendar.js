@@ -56,7 +56,7 @@ function render() {
       html += `<div class="cal-cell face" data-ymd="${ymd}"
         style="background:${emotionColor(emo)}; border-color:${dk}; color:${dk};">
         <span class="dnum">${date}</span>
-        <div class="facesvg">${featuresSVG(emo, 52)}</div>
+        <div class="facesvg">${featuresSVG(emo, 64)}</div>
         ${dayDiaries.length > 1 ? `<span class="cnt">${dayDiaries.length}</span>` : ''}
       </div>`;
     } else {
@@ -88,7 +88,7 @@ function showDay(ymd) {
       dayDiaries.map((d) => `
         <div class="diary-item" onclick="location.href='/index.html?diary=${d.id}'">
           <div class="d-row">
-            <div class="d-face">${faceSVG(d.emotion, 34, 0)}</div>
+            <div class="d-face">${faceSVG(d.emotion, 46, 0)}</div>
             <div>
               <span class="d-date">${d.place_name}</span>
               <p class="d-title">${d.ai_title || '(제목 없음)'}</p>
