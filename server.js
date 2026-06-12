@@ -19,6 +19,12 @@ app.use(session({
   cookie: { maxAge: 1000 * 60 * 60 * 24 }, // 24시간 유지
 }));
 
+// 첫 화면: 로그인 안 했으면 로그인 페이지로, 했으면 지도로
+// (express.static보다 먼저 둬야 index.html이 자동으로 나가는 걸 가로챌 수 있음)
+app.get('/', (req, res) => {
+  res.redirect(req.session.userId ? '/index.html' : '/login.html');
+});
+
 // 정적 파일 제공: public 폴더(html/css/js), uploads 폴더(사진)
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
