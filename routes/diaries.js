@@ -4,31 +4,55 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('node:crypto');
+const cloudinary = require('cloudinary').v2;
 const { q } = require('../db');
 const { analyzeDiary, writeStory, EMOTIONS, getLastStoryError } = require('../ai');
 
 const router = express.Router();
 
-// ---------- 사진 업로드 설정 (multer) ----------
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir); // 폴더 없으면 생성
+// ---------- 사진 저장 설정 ----------
+// CLOUDINARY_URL 환경변수가 있으면 Cloudinary(외부 이미지 저장소)에 올려 영구 보관하고,
+// 없으면 로컬 uploads 폴더에 저장(개발용 폴백). https URL을 그대로 photo_path에 넣어 둠.
+cloudinary.config({ secure: true }); // CLOUDINARY_URL을 자동으로 읽음
+const CLOUD_ON = !!process.env.CLOUDINARY_URL;
 
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  // 파일명 충돌 방지: 시간 + 랜덤 숫자 + 원래 확장자
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e6) + ext);
-  },
-});
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir); // 로컬 폴백용 폴더
+
+// 메모리에 담아 두고(파일을 바로 디스크에 쓰지 않음) Cloudinary든 로컬이든 골라서 처리
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB 제한
   fileFilter: (req, file, cb) => {
-    // 이미지 파일만 허용
-    cb(null, file.mimetype.startsWith('image/'));
+    cb(null, file.mimetype.startsWith('image/')); // 이미지 파일만 허용
   },
 });
+
+// 업로드된 사진(버퍼)을 저장하고, 화면에 쓸 경로(URL)를 돌려줌
+async function savePhoto(file) {
+  if (!file) return null;
+  if (CLOUD_ON) {
+    // Cloudinary로 업로드 -> 영구 https URL
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'memory-footprint', resource_type: 'image' },
+        (err, res) => (err ? reject(err) : resolve(res))
+      );
+      stream.end(file.buffer);
+    });
+    return result.secure_url;
+  }
+  // 로컬 폴백: uploads 폴더에 직접 기록
+  const fname = Date.now() + '-' + Math.round(Math.random() * 1e6) + path.extname(file.originalname);
+  fs.writeFileSync(path.join(uploadDir, fname), file.buffer);
+  return '/uploads/' + fname;
+}
+
+// Cloudinary URL에서 public_id 추출 (삭제용). 예: .../upload/v123/memory-footprint/abc.jpg -> memory-footprint/abc
+function cloudinaryPublicId(url) {
+  const m = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z0-9]+$/);
+  return m ? m[1] : null;
+}
 
 // ---------- 로그인 확인 미들웨어 ----------
 // 아래 모든 라우트는 로그인해야만 사용 가능
@@ -150,6 +174,14 @@ router.post('/', (req, res, next) => {
     ai = await analyzeDiary(content); // (실패하면 fallback이 자동 적용됨)
   }
 
+  // 사진이 있으면 저장(Cloudinary 또는 로컬)하고 그 경로를 받아 둠
+  let photoPath = null;
+  try {
+    photoPath = await savePhoto(req.file);
+  } catch (e) {
+    return res.status(502).json({ error: '사진 저장에 실패했어요. 잠시 후 다시 시도해 주세요.' });
+  }
+
   // INSERT 후 방금 저장된 행을 RETURNING *로 바로 돌려받음
   const saved = await q.get(`INSERT INTO diaries
       (user_id, place_name, address, lat, lng, content, ai_title, emotion,
@@ -158,7 +190,7 @@ router.post('/', (req, res, next) => {
     [
       req.session.userId, place_name, address || '', Number(lat), Number(lng),
       content, ai.title, ai.emotion,
-      req.file ? '/uploads/' + req.file.filename : null,
+      photoPath,
       music_url || null, music_title || null, music_thumbnail || null,
       ai.keywords && ai.keywords.length ? ai.keywords.join(',') : null, // 키워드 (쉼표 구분)
       diary_date,
@@ -245,9 +277,18 @@ router.delete('/:id', async (req, res) => {
 
   await q.run('DELETE FROM diaries WHERE id = ? AND user_id = ?', [req.params.id, req.session.userId]);
 
-  // 업로드된 사진이 있으면 파일도 삭제 (없어도 에러 안 나게 try)
+  // 업로드된 사진도 같이 삭제 (실패해도 일기 삭제는 성공 처리)
   if (row.photo_path) {
-    try { fs.unlinkSync(path.join(__dirname, '..', row.photo_path)); } catch (e) {}
+    if (/^https?:\/\//.test(row.photo_path)) {
+      // Cloudinary에 올린 사진
+      try {
+        const pid = cloudinaryPublicId(row.photo_path);
+        if (pid) await cloudinary.uploader.destroy(pid);
+      } catch (e) {}
+    } else {
+      // 로컬 파일
+      try { fs.unlinkSync(path.join(__dirname, '..', row.photo_path)); } catch (e) {}
+    }
   }
   res.json({ ok: true });
 });

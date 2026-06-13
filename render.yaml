@@ -21,6 +21,8 @@ services:
         generateValue: true       # Render가 무작위 비밀 문자열을 자동 생성
       - key: DATABASE_URL
         sync: false               # Neon PostgreSQL 연결 문자열 (대시보드에서 직접 입력)
+      - key: CLOUDINARY_URL
+        sync: false               # Cloudinary 연결 문자열 (사진 영구 저장, 대시보드에서 직접 입력)
       - key: KAKAO_JS_KEY
         sync: false               # 대시보드에서 직접 입력 (깃/코드에 안 올라감)
       - key: GEMINI_API_KEY
