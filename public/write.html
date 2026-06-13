@@ -77,7 +77,9 @@
       <p class="hint">지도를 움직여서 가운데 핀을 원하는 곳에 맞춰 주세요</p>
       <div id="pinMapWrap">
         <div id="pinMap"></div>
-        <div class="center-pin">📍</div>
+        <div class="center-pin" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2C7.6 2 4 5.6 4 10c0 5.4 7 11.5 7.3 11.8a1 1 0 0 0 1.4 0C13 21.5 20 15.4 20 10c0-4.4-3.6-8-8-8Z" fill="#2B4570" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="10" r="3" fill="#ffffff"/></svg>
+        </div>
       </div>
       <p class="hint" id="pinAddr" style="margin-top:10px;">주소 확인 중...</p>
       <label>이 장소에 대해 설명해 주세요 <span class="hint">(비워 두면 주소로 저장돼요)</span></label>

@@ -242,6 +242,22 @@ const diaries = [
   ['포항 호미곶','경북 포항시 남구 호미곶면',36.07806,129.56974,'대구 여행을 연장해서 포항 호미곶까지.\n바다에서 솟은 \'상생의 손\' 조형물이 유명한 곳.\n일출 명소라 새벽에 갔다.\n구름 사이로 떠오르는 해가 손바닥 위에 걸렸다.\n한반도의 가장 동쪽에서 보는 일출은 특별했다.\n대구 여행의 화려한 마무리가 됐다.','상생의 손바닥','평온','2026-05-06','포항,일출'],
 ];
 
+// 시연용 노래 (전부 스포티파이 "원곡" — 앱 oEmbed로 제목/썸네일 검증 완료, 노래방·커버 제외)
+// m: 어울리는 감정 태그 (해당 감정 일기에 우선 배정)
+const SONGS = [
+  { u: 'https://open.spotify.com/track/3Ml2s37uS9jqRM2R3bfDiB', t: '모든 날, 모든 순간 - 폴킴', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e0290a98780fb70dde769f9e61a', m: ['사랑', '평온'] },
+  { u: 'https://open.spotify.com/track/3HseiFZGdk1Fu13kVZt5pD', t: '월화수목금토일 - 수호, 아이유', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e029870a77c00b9a5213ba4234d', m: ['기쁨', '설렘', '평범'] },
+  { u: 'https://open.spotify.com/track/15c7KZTrsCUxCQcOdUVELc', t: 'Galaxy (우주를 줄게) - 볼빨간사춘기', img: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02cbde8680a3f8d3976fa9cfab', m: ['설렘', '사랑', '기쁨'] },
+  { u: 'https://open.spotify.com/track/641MofioMtb3ugp8jhwVzp', t: '별 보러 가자 - 적재', img: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0294ae7adcaa0a26f4c7acba86', m: ['평온', '평범', '슬픔'] },
+  { u: 'https://open.spotify.com/track/6t0nd1lYko38yr6QdJePia', t: 'Tomboy - 혁오', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e026b0b72f94905f2321564a20f', m: ['화남', '불안', '지침', '평범'] },
+  { u: 'https://open.spotify.com/track/5Kkfm2cTiDGmxVcG7huRCh', t: '뜨거운 여름밤은 가고 남은건 볼품 없지만 - 잔나비', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02008e3c4f871e1fea9b0d7f92', m: ['슬픔', '사랑', '화남'] },
+  { u: 'https://open.spotify.com/track/775S83AMYbQc8SYteOktTL', t: '그라데이션 - 10cm', img: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e026ab009ae4b0ba96be795b3bb', m: ['설렘', '사랑'] },
+  { u: 'https://open.spotify.com/track/3P3UA61WRQqwCXaoFOTENd', t: '밤편지 - 아이유', img: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02c06f0e8b33ac2d246158253e', m: ['평온', '슬픔', '불안'] },
+  { u: 'https://open.spotify.com/track/0EhdXt3y460mTRsi97Pyk5', t: '한 페이지가 될 수 있게 - DAY6', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e022ecc00c9a71f5d72ce87958e', m: ['기쁨', '지침', '평범'] },
+  { u: 'https://open.spotify.com/track/19Hg1UCZaCdpHB37L7x63X', t: 'EVERYTHING - 검정치마', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e0210b3ebc65d2f65964cf461d8', m: ['사랑', '평온'] },
+  { u: 'https://open.spotify.com/track/320twJYO0LC64eWCuCC5vj', t: '난춘 - 새소년', img: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e0262fa9ca3dea123404eda1b71', m: ['불안', '지침', '평온', '설렘'] },
+];
+
 // PostgreSQL은 비동기라 전체를 async로 감싼다.
 (async () => {
   await initDb(); // 테이블이 없으면 만들어 둠 (서버를 한 번도 안 켰을 때 대비)
@@ -261,15 +277,30 @@ const diaries = [
   const uid = user.id;
 
   const insertSql = `INSERT INTO diaries
-    (user_id, place_name, address, lat, lng, content, ai_title, emotion, diary_date, keywords)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
+    (user_id, place_name, address, lat, lng, content, ai_title, emotion, diary_date, keywords,
+     music_url, music_title, music_thumbnail)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`;
 
-  for (const d of diaries) {
-    await pool.query(insertSql, [uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null]);
+  // 감정별로 곡을 돌아가며 배정(변주). 약 절반의 일기에만 노래를 단다.
+  const songCounter = {};
+  let withSong = 0;
+  for (let idx = 0; idx < diaries.length; idx++) {
+    const d = diaries[idx];
+    const emotion = d[6];
+    let mUrl = null, mTitle = null, mThumb = null;
+    if (idx % 2 === 0) { // 짝수 인덱스 ≈ 50%
+      const pool2 = SONGS.filter((s) => s.m.includes(emotion));
+      const candidates = pool2.length ? pool2 : SONGS; // 매칭 없으면 전체에서
+      const n = (songCounter[emotion] = (songCounter[emotion] || 0) + 1);
+      const song = candidates[n % candidates.length];
+      mUrl = song.u; mTitle = song.t; mThumb = song.img;
+      withSong++;
+    }
+    await pool.query(insertSql, [uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null, mUrl, mTitle, mThumb]);
   }
 
-  console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다.`);
-  console.log('(강원대 춘천캠 23학번 페르소나 / 사진·음악은 직접 추가하세요)');
+  console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다. (노래 ${withSong}곡 포함)`);
+  console.log('(강원대 춘천캠 23학번 페르소나 / 사진은 직접 추가하세요)');
   await pool.end();
 })().catch((err) => {
   console.error('시드 실패:', err.message);

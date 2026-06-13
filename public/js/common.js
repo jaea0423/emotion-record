@@ -212,6 +212,7 @@ const NAV_ICONS = {
   album: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17.5l4.5-4.5 3 3 3.5-3.5 3.5 4"/></svg>',
   music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.5V6l10-2v12.5"/><circle cx="6.5" cy="18.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>',
   tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 9h14M5 15h14M10.5 4l-3 16M16.5 4l-3 16"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg>',
 };
 
 // ================= 화면 공통 뼈대 =================
@@ -280,8 +281,9 @@ async function renderNav(active) {
   const userBox = document.createElement('div');
   userBox.className = 'corner corner-tr fdrop';
   userBox.innerHTML = `
-    <button type="button" class="fdrop-btn" id="userBtn">${esc(me.username)} 님 <span class="arr">▾</span></button>
+    <button type="button" class="user-btn" id="userBtn" title="내 계정" aria-label="내 계정">${NAV_ICONS.user}</button>
     <div class="fdrop-menu" id="userMenu">
+      <div class="menu-user">${esc(me.username)} 님</div>
       <button id="logoutBtn">로그아웃</button>
     </div>`;
   document.body.appendChild(userBox);
