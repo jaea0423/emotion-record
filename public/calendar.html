@@ -8,8 +8,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
-<body>
+<body class="panel-collapsed">
   <!-- 상단 내비게이션 + 기간 필터는 common.js의 renderNav()가 그려 넣음 -->
+  <!-- panel-collapsed: 처음부터 패널 접힌 상태로 시작 (펼쳐졌다 접히는 깜빡임 방지) -->
 
   <!-- 지도와 같은 구조: 왼쪽 메인(달력) + 오른쪽 패널(이 날의 기억) -->
   <div class="map-layout cal-layout">
@@ -42,7 +43,7 @@
     </aside>
 
     <!-- 패널 접기/펼치기 토글 -->
-    <button class="panel-toggle" id="panelToggle" title="이 날의 기억 접기/펼치기" aria-label="이 날의 기억 접기/펼치기">›</button>
+    <button class="panel-toggle" id="panelToggle" title="이 날의 기억 접기/펼치기" aria-label="이 날의 기억 접기/펼치기">‹</button>
   </div>
 
   <script src="/js/common.js"></script>

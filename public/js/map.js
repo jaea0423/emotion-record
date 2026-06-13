@@ -245,7 +245,9 @@ function showCluster(clusterMarkers) {
     const size = Math.min(80 + list.length * 6, 140);
     showHighlightAt(avgLat, avgLng, dominantEmotion(list), list.length, size);
   }
-  const sorted = [...list].sort((a, b) => a.diary_date.localeCompare(b.diary_date)); // 시간순 (오래된 것부터)
+  // 이야기(AI)는 시간순(흐름), 목록 표시는 최신이 위로
+  const chrono = [...list].sort((a, b) => a.diary_date.localeCompare(b.diary_date) || a.id - b.id);
+  const display = [...chrono].reverse();
 
   const body = document.getElementById('panelBody');
   body.innerHTML = `
@@ -253,7 +255,7 @@ function showCluster(clusterMarkers) {
     <p class="addr">장소 ${placeList.length}곳 · 기억 ${list.length}개</p>
     <button class="btn ai-btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳들의 이야기</button>
     <div class="ai-story" id="storyBox" style="display:none;"></div>
-    ${sorted.map((d) => `
+    ${display.map((d) => `
       <div class="diary-item" data-id="${d.id}">
         <div class="d-row">
           <div class="d-face">${faceSVG(d.emotion, 46, 0)}</div>
@@ -264,7 +266,7 @@ function showCluster(clusterMarkers) {
         </div>
       </div>`).join('')}
   `;
-  wireStory('이 근처', sorted.map((d) => d.id)); // ✨ 버튼 연결 (common.js)
+  wireStory('이 근처', chrono.map((d) => d.id)); // ✨ 버튼 연결 (시간순으로 전달)
   // 일기 클릭 -> 상세 (뒤로 가면 이 목록으로 돌아옴)
   body.querySelectorAll('.diary-item').forEach((el) => {
     el.onclick = () => {
@@ -282,7 +284,9 @@ function showPlace(key) {
   document.querySelector('.map-layout')?.classList.add('panel-open'); // 좁은 화면: 패널 슬라이드 인
   if (document.body.classList.contains('panel-collapsed')) setPanelCollapsed(false); // 접혀 있으면 펼침
   highlightPlace(p); // 선택된 장소 마커를 검정 테두리 + 둥둥 효과로 강조
-  const sorted = [...p.list].sort((a, b) => a.diary_date.localeCompare(b.diary_date)); // 시간순
+  // 이야기(AI)는 시간순(흐름), 목록 표시는 최신이 위로
+  const chrono = [...p.list].sort((a, b) => a.diary_date.localeCompare(b.diary_date) || a.id - b.id);
+  const display = [...chrono].reverse();
 
   const body = document.getElementById('panelBody');
   body.innerHTML = `
@@ -290,7 +294,7 @@ function showPlace(key) {
     <p class="addr">${esc(p.address) || ''} · 이 곳의 기억 ${p.list.length}개</p>
     ${p.list.length >= 2 ? `<button class="btn ai-btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 곳의 이야기</button>` : ''}
     <div class="ai-story" id="storyBox" style="display:none;"></div>
-    ${sorted.map((d) => `
+    ${display.map((d) => `
       <div class="diary-item" data-id="${d.id}">
         <div class="d-row">
           <div class="d-face">${faceSVG(d.emotion, 46, 0)}</div>

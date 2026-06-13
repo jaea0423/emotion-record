@@ -552,7 +552,12 @@ body.panel-collapsed .panel { padding-left: 0; padding-right: 0; border-left: no
 .panel-title, .panel h2, .panel-placeholder p, .detail .back { color: #FFFFFF; }
 /* 보조 글자(힌트·주소) = 옅은 블루그레이 (네이비 배경 위) */
 .panel .addr, .panel .hint, .panel-placeholder .hint, .detail .d-date { color: #C2CEE2; }
-.detail .content { color: #E2E9F5; }
+/* 본문: 네이비 패널 위에 따뜻한 오프화이트 박스(편지지 느낌) + 진한 글자로 가독성↑ */
+.detail .content {
+  color: var(--ink); background: #FAF7F0;
+  border-radius: 14px; padding: 15px 17px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05);
+}
 /* 흰 카드(기억 목록) 안 글자는 네이비 상속을 끊고 어두운색으로 -> 가독성 */
 .panel .diary-item { color: var(--ink); }
 .panel .diary-item .d-title { color: var(--ink); }
