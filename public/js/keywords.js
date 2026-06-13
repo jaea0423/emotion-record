@@ -50,8 +50,8 @@ function render() {
     const isBig = t > 0.72;
     el.className = 'cloud-chip' + (isBig ? ' big' : '');
     el.style.fontSize = fs + 'px';
-    // 빈도가 높을수록 색이 노랑(꿀색)에 가깝게 (낮으면 차분한 모래색)
-    if (!isBig) el.style.color = mixColor('#A99D8A', '#E8A200', t);
+    // 빈도가 높을수록 색이 진한 네이비에 가깝게 (낮으면 차분한 블루그레이) — 네이비 테마 통일
+    if (!isBig) el.style.color = mixColor('#9AA6BC', '#2B4570', t);
     el.innerHTML = `#${esc(k)} <span class="cc">${c}</span>`;
     el.style.visibility = 'hidden';
     box.appendChild(el);

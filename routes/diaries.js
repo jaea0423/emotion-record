@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('node:crypto');
 const db = require('../db');
-const { analyzeDiary, writeStory, EMOTIONS } = require('../ai');
+const { analyzeDiary, writeStory, EMOTIONS, getLastStoryError } = require('../ai');
 
 const router = express.Router();
 
@@ -93,7 +93,7 @@ router.post('/story', async (req, res) => {
   // 일기당 앞 150자를 AI에게 전달 (너무 짧으면 맥락 누락, 너무 길면 프롬프트 낭비)
   const lines = used.map((r) => `- (${r.diary_date}, ${r.emotion}) ${r.ai_title || ''}: ${r.content.slice(0, 150)}`);
   const story = await writeStory(title || '이 곳', lines);
-  if (!story) return res.status(503).json({ error: 'AI가 이야기를 만들지 못했어요. 잠시 후 다시 시도해 주세요.' });
+  if (!story) return res.status(503).json({ error: 'AI가 이야기를 만들지 못했어요. (사유: ' + (getLastStoryError() || '알 수 없음') + ')' });
 
   db.prepare('INSERT INTO stories (user_id, cache_key, story) VALUES (?, ?, ?)').run(req.session.userId, key, story);
   res.json({ story, cached: false });

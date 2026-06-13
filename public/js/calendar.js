@@ -16,21 +16,51 @@ let selectedYmd = null; // 마지막으로 클릭한 날짜 (칸 강조용)
   document.getElementById('nextBtn').onclick = () => move(1);
   document.getElementById('modeMonth').onclick = () => setMode('month');
   document.getElementById('modeYear').onclick = () => setMode('year');
+
+  // ----- 오른쪽 패널: 기본은 꺼짐(접힘), 날짜를 누르면 펼쳐짐 -----
+  document.getElementById('panelClose').onclick = closePanel;
+  const t = document.getElementById('panelToggle');
+  if (t) t.onclick = () => setPanelCollapsed(!document.body.classList.contains('panel-collapsed'));
+  setPanelCollapsed(true); // 처음엔 패널 off
+  showPlaceholder();       // 패널 안에는 안내 문구
+
   render();
 })();
 
 // 기간 필터가 바뀌면 common.js의 renderNav가 이 함수를 불러 줌
 window.applyFilter = () => {
   render();
-  document.getElementById('dayList').innerHTML = '';
+  closePanel();
 };
+
+// ----- 패널 접기/펼치기 (지도와 동일하게 --panel-w가 0이 되어 정렬이 따라 움직임) -----
+function setPanelCollapsed(collapsed) {
+  document.body.classList.toggle('panel-collapsed', collapsed);
+  const t = document.getElementById('panelToggle');
+  if (t) t.textContent = collapsed ? '‹' : '›';
+}
+function closePanel() {
+  selectedYmd = null;
+  markSelected();
+  document.querySelector('.map-layout')?.classList.remove('panel-open');
+  setPanelCollapsed(true);
+  showPlaceholder();
+}
+function showPlaceholder() {
+  document.getElementById('panelBody').innerHTML = `
+    <div class="panel-placeholder">
+      <div class="pp-face">${faceSVG('기쁨', 64, 0)}</div>
+      <p>날짜를 눌러 보세요</p>
+      <span class="hint">그 날의 기억이 여기에 나타나요</span>
+    </div>`;
+}
 
 // 월/년 보기 전환
 function setMode(mode) {
   viewMode = mode;
   document.getElementById('modeMonth').classList.toggle('on', mode === 'month');
   document.getElementById('modeYear').classList.toggle('on', mode === 'year');
-  document.getElementById('dayList').innerHTML = '';
+  closePanel();
   render();
 }
 
@@ -58,18 +88,6 @@ function renderMonth() {
   const grid = document.getElementById('calGrid');
   grid.classList.remove('year');
   const visible = filterDiaries(diaries); // 기간 필터 적용 (common.js)
-
-  // 이 달의 AI 회고 버튼 (기록이 2개 이상일 때만)
-  const prefix2 = `${year}-${String(month + 1).padStart(2, '0')}`;
-  const monthDiaries = visible.filter((d) => d.diary_date.startsWith(prefix2));
-  const area = document.getElementById('storyArea');
-  if (monthDiaries.length >= 2) {
-    area.innerHTML = `<button class="btn ai-btn" style="width:100%;" id="storyBtn">✨ AI가 들려주는 이 달의 이야기</button>
-      <div class="ai-story" id="storyBox" style="display:none;"></div>`;
-    wireStory(`${year}년 ${month + 1}월`, monthDiaries.map((d) => d.id));
-  } else {
-    area.innerHTML = '';
-  }
 
   // 요일 머리글
   let html = ['일', '월', '화', '수', '목', '금', '토']
@@ -121,7 +139,6 @@ function markSelected() {
 // 12달이 한 화면에: 기록이 있는 달은 그 달의 대표 감정 얼굴 + 개수
 function renderYear() {
   document.getElementById('calTitle').textContent = `${year}년`;
-  document.getElementById('storyArea').innerHTML = ''; // 연도 보기에선 회고 없음
   const grid = document.getElementById('calGrid');
   grid.classList.add('year');
   const visible = filterDiaries(diaries);
@@ -152,25 +169,26 @@ function renderYear() {
   });
 }
 
-// ================= 이 날의 기억 =================
+// ================= 이 날의 기억 (오른쪽 패널) =================
 function showDay(ymd) {
   selectedYmd = ymd;
   markSelected(); // 누른 칸을 바로 강조
-  const box = document.getElementById('dayList');
+  setPanelCollapsed(false); // 패널 펼침
+  document.querySelector('.map-layout')?.classList.add('panel-open'); // 좁은 화면: 슬라이드 인
+
+  const box = document.getElementById('panelBody');
   const dayDiaries = filterDiaries(diaries).filter((d) => d.diary_date === ymd);
 
   // + 버튼: 이 날짜가 미리 입력된 채로 작성 페이지 열기 (기록 없는 날에도 가능)
   const addBtn = `<button class="btn main" style="width:100%; margin-top:14px;" id="writeOnBtn">＋ 이 날의 기억 남기기</button>`;
 
   if (dayDiaries.length === 0) {
-    box.innerHTML = `<h2>이 날의 기억</h2>
-      <p class="hint">${prettyDate(ymd)} — 아직 기록이 없어요.</p>${addBtn}`;
+    box.innerHTML = `<p class="addr">${prettyDate(ymd)} — 아직 기록이 없어요.</p>
+      ${aiRangeHTML(ymd)}${addBtn}`;
   } else {
     // 일기 카드 클릭 시 지도 페이지에서 해당 일기가 열리도록 ?diary=ID 로 이동
-    box.innerHTML = `<h2>이 날의 기억</h2>
-      <p class="hint" style="margin-bottom:10px;">${prettyDate(ymd)} · ${dayDiaries.length}개</p>
-      <button class="btn ai-btn" style="width:100%; margin-bottom:6px;" id="dayStoryBtn">✨ AI가 들려주는 이 날의 이야기</button>
-      <div class="ai-story" id="dayStoryBox" style="display:none; margin-bottom:10px;"></div>` +
+    box.innerHTML = `<p class="addr">${prettyDate(ymd)} · 이 날의 기억 ${dayDiaries.length}개</p>
+      ${aiRangeHTML(ymd)}` +
       dayDiaries.map((d) => `
         <div class="diary-item" onclick="location.href='/index.html?diary=${d.id}'">
           <div class="d-row">
@@ -181,12 +199,72 @@ function showDay(ymd) {
             </div>
           </div>
         </div>`).join('') + addBtn;
-    // ✨ 이 날의 이야기 버튼 연결 (id 충돌을 피해 day 전용 id 사용)
-    wireStory(prettyDate(ymd), dayDiaries.map((d) => d.id), 'dayStoryBtn', 'dayStoryBox');
   }
+
+  wireAiRange(ymd); // 통합 AI 버튼(해/달/일 선택) 연결
 
   document.getElementById('writeOnBtn').onclick = () => {
     sessionStorage.setItem('prefillDate', ymd);
     location.href = '/write.html';
   };
+}
+
+// ----- 통합 AI 버튼: 하나만 두고, 누르면 선택한 날짜 기준 해/달/일 범위를 고름 -----
+function aiRangeHTML(ymd) {
+  return `
+    <button class="btn ai-btn" style="width:100%;" id="aiOpenBtn">✨ AI가 들려주는 이야기</button>
+    <div class="ai-range" id="aiRange" style="display:none;">
+      <span class="ai-range-label">어느 범위로 들려줄까요?</span>
+      <div class="ai-range-opts">
+        <button type="button" class="ai-range-opt" data-range="day">이 날</button>
+        <button type="button" class="ai-range-opt" data-range="month">이 달</button>
+        <button type="button" class="ai-range-opt" data-range="year">이 해</button>
+      </div>
+    </div>
+    <button class="btn ai-btn" id="storyBtn" style="display:none; width:100%;"></button>
+    <div class="ai-story" id="storyBox" style="display:none; margin-top:10px;"></div>`;
+}
+
+function wireAiRange(ymd) {
+  const [y, m] = ymd.split('-');
+  const openBtn = document.getElementById('aiOpenBtn');
+  const rangeBox = document.getElementById('aiRange');
+  if (!openBtn) return;
+
+  // 버튼 누르면 범위 선택 노출 (버튼 숨김)
+  openBtn.onclick = () => { openBtn.style.display = 'none'; rangeBox.style.display = 'block'; };
+
+  rangeBox.querySelectorAll('.ai-range-opt').forEach((opt) => {
+    opt.onclick = () => {
+      const range = opt.dataset.range;
+      const all = filterDiaries(diaries);
+      let ids, title;
+      if (range === 'day') {
+        ids = all.filter((d) => d.diary_date === ymd).map((d) => d.id);
+        title = prettyDate(ymd);
+      } else if (range === 'month') {
+        const prefix = `${y}-${m}`; // "2026-06"
+        ids = all.filter((d) => d.diary_date.startsWith(prefix)).map((d) => d.id);
+        title = `${y}년 ${Number(m)}월`;
+      } else { // year
+        ids = all.filter((d) => d.diary_date.startsWith(`${y}-`)).map((d) => d.id);
+        title = `${y}년`;
+      }
+
+      rangeBox.style.display = 'none';
+      const storyBtn = document.getElementById('storyBtn');
+      if (ids.length === 0) {
+        // 그 범위에 기록이 없으면 안내만
+        const sb = document.getElementById('storyBox');
+        sb.style.display = 'block';
+        sb.textContent = `${title}에는 아직 기억이 없어요.`;
+        return;
+      }
+      // wireStory는 버튼 글자를 라벨로 쓰므로, 보이지 않게 글자만 채우고 자동 클릭
+      storyBtn.textContent = `✨ ${title}의 이야기`;
+      storyBtn.style.display = 'block';
+      wireStory(title, ids, 'storyBtn', 'storyBox');
+      storyBtn.click(); // 바로 이야기 생성 시작
+    };
+  });
 }

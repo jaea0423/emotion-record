@@ -53,7 +53,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_stories_key ON stories(user_id, cache_key);
 `);
 
-// 감정 이름 마이그레이션: 예전 데이터의 '분노'를 '화남'으로 바꿔 줌 (없으면 아무 일도 안 함)
+// 감정 이름 마이그레이션: 예전 데이터의 이름을 현재 이름으로 바꿔 줌 (없으면 아무 일도 안 함)
 db.exec(`UPDATE diaries SET emotion = '화남' WHERE emotion = '분노'`);
+db.exec(`UPDATE diaries SET emotion = '평범' WHERE emotion = '그저 그런 날'`);
 
 module.exports = db;

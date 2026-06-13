@@ -11,29 +11,38 @@
 <body>
   <!-- 상단 내비게이션 + 기간 필터는 common.js의 renderNav()가 그려 넣음 -->
 
-  <div class="page wide">
-    <h1>날짜로 보는 기억</h1>
+  <!-- 지도와 같은 구조: 왼쪽 메인(달력) + 오른쪽 패널(이 날의 기억) -->
+  <div class="map-layout cal-layout">
+    <div class="cal-main">
+      <h1>날짜로 보는 기억</h1>
 
-    <!-- 달 이동 -->
-    <div class="cal-head">
-      <button id="prevBtn">◀</button>
-      <strong id="calTitle"></strong>
-      <button id="nextBtn">▶</button>
-      <!-- 월/년 보기 전환 -->
-      <div class="cal-mode">
-        <button id="modeMonth" class="on">월</button>
-        <button id="modeYear">년</button>
+      <!-- 달 이동 -->
+      <div class="cal-head">
+        <button id="prevBtn">◀</button>
+        <strong id="calTitle"></strong>
+        <button id="nextBtn">▶</button>
+        <!-- 월/년 보기 전환 -->
+        <div class="cal-mode">
+          <button id="modeMonth" class="on">월</button>
+          <button id="modeYear">년</button>
+        </div>
       </div>
+
+      <!-- 달력 격자 (기록 있는 날은 칸 자체가 얼굴이 됨) -->
+      <div class="cal-grid" id="calGrid"></div>
     </div>
 
-    <!-- 이 달의 AI 회고 -->
-    <div id="storyArea" style="margin-bottom:14px;"></div>
+    <!-- 오른쪽 패널: 날짜를 누르면 "이 날의 기억"이 여기에 (기본은 안내 문구) -->
+    <aside class="panel" id="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">이 날의 기억</h2>
+        <button class="close" id="panelClose">✕</button>
+      </div>
+      <div id="panelBody"></div>
+    </aside>
 
-    <!-- 달력 격자 (기록 있는 날은 칸 자체가 얼굴이 됨) -->
-    <div class="cal-grid" id="calGrid"></div>
-
-    <!-- 날짜 클릭 시 "이 날의 기억" 목록 -->
-    <div class="day-list" id="dayList"></div>
+    <!-- 패널 접기/펼치기 토글 -->
+    <button class="panel-toggle" id="panelToggle" title="이 날의 기억 접기/펼치기" aria-label="이 날의 기억 접기/펼치기">›</button>
   </div>
 
   <script src="/js/common.js"></script>

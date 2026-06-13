@@ -12,10 +12,10 @@
   <!-- 상단 내비게이션 + 기간 필터는 common.js의 renderNav()가 그려 넣음 -->
 
   <div class="map-layout">
-    <!-- 왼쪽 고정 패널: 9가지 감정 목록 (개수는 기간 필터와 연동) -->
-    <aside class="side-left" id="emotionList"></aside>
-
     <div id="map"></div>
+
+    <!-- 감정 9종: 지도 좌측 중앙에 작은 알약으로 떠 있음 (패널 아님) -->
+    <aside class="emotion-float" id="emotionList"></aside>
 
     <!-- 오른쪽 고정 패널: 기억 목록 (기본은 안내 문구, 마커를 누르면 기억이 보임) -->
     <aside class="panel" id="panel">
@@ -25,6 +25,9 @@
       </div>
       <div id="panelBody"></div>
     </aside>
+
+    <!-- 오른쪽 패널 접기/펼치기 토글 (패널 왼쪽 경계에 붙어 따라 움직임) -->
+    <button class="panel-toggle" id="panelToggle" title="기억 목록 접기/펼치기" aria-label="기억 목록 접기/펼치기">›</button>
   </div>
 
   <script src="/js/common.js"></script>

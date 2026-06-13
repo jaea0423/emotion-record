@@ -105,7 +105,15 @@ let selOverlay = null; // 선택된 마커 위에 띄우는 강조 오버레이 
     }
   });
 
+  // ----- 레이아웃: 오른쪽 패널은 고정(접기 없음), 감정 목록은 좌측 중앙에 떠 있음 -----
+  // 창 크기가 바뀌면 지도만 다시 맞춰 줌 (패널 폭이 vw라 바뀔 수 있음)
+  window.addEventListener('resize', () => { if (map) map.relayout(); });
+
   await loadDiaries();
+
+  // 지도 진입 시 패널은 기본 접힘. 마커를 누르거나 토글을 열면 펼쳐짐.
+  showPlaceholder();       // 펼쳤을 때 보일 안내 문구 미리 준비
+  setPanelCollapsed(true); // 기본 접힘
 
   // (시작 위치는 loadDiaries가 잡아 둔 "마지막 기록 위치" 기준
   //  -- 데스크톱 위치 API는 IP 기반이라 부정확해서 쓰지 않음)
@@ -228,6 +236,8 @@ function showCluster(clusterMarkers) {
   const placeList = clusterMarkers.map((m) => markerPlace.get(m)).filter(Boolean);
   const list = placeList.flatMap((p) => p.list);
   if (!list.length) return closePanel();
+  document.querySelector('.map-layout')?.classList.add('panel-open'); // 좁은 화면: 슬라이드 인
+  if (document.body.classList.contains('panel-collapsed')) setPanelCollapsed(false); // 접혀 있으면 펼침
   // 묶음 중심(평균 위치)에 대표 감정으로 강조 표시
   if (placeList.length) {
     const avgLat = placeList.reduce((a, p) => a + p.lat, 0) / placeList.length;
@@ -269,6 +279,8 @@ function showCluster(clusterMarkers) {
 function showPlace(key) {
   const p = places[key];
   if (!p) return closePanel();
+  document.querySelector('.map-layout')?.classList.add('panel-open'); // 좁은 화면: 패널 슬라이드 인
+  if (document.body.classList.contains('panel-collapsed')) setPanelCollapsed(false); // 접혀 있으면 펼침
   highlightPlace(p); // 선택된 장소 마커를 검정 테두리 + 둥둥 효과로 강조
   const sorted = [...p.list].sort((a, b) => a.diary_date.localeCompare(b.diary_date)); // 시간순
 
@@ -313,7 +325,11 @@ function showPlace(key) {
 
 // ---------- 사이드 패널: 일기 상세 (제목 + 감정 수정 가능) ----------
 function showDetail(d, backKey) {
-  highlightDiary(d); // 이 일기의 위치 마커를 강조
+  document.querySelector('.map-layout')?.classList.add('panel-open'); // 좁은 화면: 패널 슬라이드 인
+  if (document.body.classList.contains('panel-collapsed')) setPanelCollapsed(false); // 접혀 있으면 펼침
+  // 들어온 경로의 둥둥 마커(장소/근처 뭉치)를 그대로 유지.
+  // 강조가 아직 없을 때(딥링크 ?diary=ID 등)만 새로 표시 -> 개별 기억을 골라도 마커가 안 바뀜
+  if (!selOverlay) highlightDiary(d);
   const body = document.getElementById('panelBody');
 
   // 음악 임베드(iframe) 주소 만들기
@@ -350,7 +366,7 @@ function showDetail(d, backKey) {
       ${musicEmbed}
 
       <div class="row" style="margin-top:18px;">
-        <button class="btn" id="editBtn" style="flex:1;">✏ 수정</button>
+        <button class="btn" id="editBtn" style="flex:1;">수정</button>
         <button class="btn danger" id="delBtn" style="flex:1;">삭제</button>
       </div>
     </div>
@@ -511,8 +527,22 @@ function openPanel() { map && map.relayout(); }
 function closePanel() { showPlaceholder(); }
 document.getElementById('panelClose').onclick = closePanel;
 
+// 오른쪽 패널 접기/펼치기: body 클래스만 토글하면 --panel-w가 0이 되어
+// 패널 폭 + 로고/독/코너 정렬 + 지도 영역이 한꺼번에 따라 움직임 (CSS transition)
+function setPanelCollapsed(collapsed) {
+  document.body.classList.toggle('panel-collapsed', collapsed);
+  const t = document.getElementById('panelToggle');
+  if (t) t.textContent = collapsed ? '‹' : '›'; // 접힘이면 펼치기(‹), 펼침이면 접기(›)
+  setTimeout(() => { if (map) map.relayout(); }, 320); // 애니메이션 끝난 뒤 지도만 재계산
+}
+const _panelToggle = document.getElementById('panelToggle');
+if (_panelToggle) {
+  _panelToggle.onclick = () => setPanelCollapsed(!document.body.classList.contains('panel-collapsed'));
+}
+
 // 아무것도 안 눌렀을 때 보여 주는 안내 문구
 function showPlaceholder() {
+  document.querySelector('.map-layout')?.classList.remove('panel-open'); // 좁은 화면: 패널 닫힘
   clearHighlight();
   document.getElementById('panelBody').innerHTML = `
     <div class="panel-placeholder">
@@ -529,11 +559,9 @@ function renderEmotionPanel(visible) {
   for (const d of visible) counts[d.emotion] = (counts[d.emotion] || 0) + 1;
   const box = document.getElementById('emotionList');
   box.innerHTML = `
-    <h2 class="el-title">감정 목록</h2>
-    <p class="hint" style="margin:-6px 0 10px;">감정을 누르면 그 감정의 기억만 지도에 보여요</p>
     ${EMOTION_LIST.map((e) => `
-      <div class="el-row ${emotionFilter === e ? 'on' : ''}" data-emo="${e}">
-        ${faceSVG(e, 34, 0)}
+      <div class="el-row ${emotionFilter === e ? 'on' : ''}" data-emo="${e}" title="${e} 기억만 보기">
+        ${faceSVG(e, 22, 0)}
         <span class="el-name">${e}</span>
         <span class="el-cnt">${counts[e] || 0}</span>
       </div>`).join('')}`;

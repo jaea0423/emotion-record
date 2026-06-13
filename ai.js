@@ -2,7 +2,7 @@
 require('dotenv').config();
 
 // 우리 서비스의 9가지 감정 (이 목록 밖의 감정은 존재할 수 없음)
-const EMOTIONS = ['기쁨', '사랑', '설렘', '평온', '슬픔', '불안', '화남', '지침', '그저 그런 날'];
+const EMOTIONS = ['기쁨', '사랑', '설렘', '평온', '슬픔', '불안', '화남', '지침', '평범'];
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
@@ -10,11 +10,27 @@ const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
  * 일기 본문을 받아 { title, emotion } 을 돌려준다.
  * Gemini가 실패하면 fallback(기본값)으로 처리해서 서비스가 멈추지 않게 한다.
  */
+// AI 호출이 실패했을 때 본문 단어로 감정을 대략 추정 (평범 남발 방지)
+function guessEmotion(text) {
+  const rules = [
+    ['화남', /짜증|화가|화났|열받|빡|어이없|서운|삐쳤|안\s?줬|안줬|싸웠|따졌|짜증나|불공평|억울/],
+    ['슬픔', /슬프|슬펐|울었|눈물|그리워|보고\s?싶|외로|쓸쓸|헤어|이별|허전|먹먹/],
+    ['불안', /불안|걱정|초조|떨려|떨렸|긴장|두려|막막|조마조마/],
+    ['지침', /피곤|지쳐|지쳤|힘들|졸려|졸렸|번아웃|녹초|무기력|버거/],
+    ['설렘', /설레|설렜|두근|기대|떨리는\s?마음|기다려/],
+    ['사랑', /사랑|좋아해|애틋|보고팠|고마운\s?사람/],
+    ['기쁨', /행복|기뻤|신나|신났|최고|즐거|뿌듯|웃었|기분\s?좋|행운/],
+    ['평온', /평온|편안|차분|여유|잔잔|고요|포근|힐링/],
+  ];
+  for (const [emo, re] of rules) if (re.test(text)) return emo;
+  return '평범';
+}
+
 async function analyzeDiary(content) {
-  // 실패했을 때 쓸 기본값: 첫 문장 일부를 제목으로, 감정은 '그저 그런 날', 키워드 없음
+  // 실패했을 때 쓸 기본값: 첫 문장 일부를 제목으로, 감정은 단어로 추정, 키워드 없음
   const fallback = {
     title: content.trim().split('\n')[0].slice(0, 20),
-    emotion: '그저 그런 날',
+    emotion: guessEmotion(content),
     keywords: [],
     fromAI: false, // AI 분석 실패 표시 (프론트에서 안내용)
   };
@@ -35,7 +51,13 @@ async function analyzeDiary(content) {
 
 [감정 규칙]
 - 감정 목록: ${EMOTIONS.join(', ')}
-- 애매하면 emotion은 "그저 그런 날"로 해라.
+- 반드시 일기에 드러난 마음에 "가장 가까운" 감정 하나를 골라라. 감정이 약하거나 섞여 있어도 방향을 잡아라.
+- "평범"은 정말로 아무 감정 동요가 없는 무던한 하루에만 써라. 조금이라도 서운/짜증/설렘/뿌듯함 등이 보이면 그 감정을 택해라.
+- 미묘한 예시:
+  · "친구가 학식 한 입도 안 줬다" -> 장난 같지만 서운함/짜증 -> "화남"
+  · "별일 없었지만 그 애 생각이 났다" -> "설렘"
+  · "할 건 했는데 마음이 붕 떴다" -> "불안"
+  · "그냥 밥 먹고 수업 듣고 집에 왔다" -> 진짜 무던함 -> "평범"
 
 [키워드 규칙]
 - 일기의 핵심을 나타내는 명사 1~3개. (예: "여자친구", "여행", "시험", "카페", "쇼핑")
@@ -52,10 +74,9 @@ ${content}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        // JSON만 답하도록 강제 + thinking(생각 시간) 끄기 -> 짧은 작업이라 품질 손해 없이 훨씬 빨라짐
+        // JSON만 답하도록 강제. (thinking은 켜 둠 -> 미묘한 감정도 신중히 판단)
         generationConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
       signal: AbortSignal.timeout(20000), // 20초 안에 답이 없으면 포기 -> fallback으로 저장
@@ -73,8 +94,8 @@ ${content}`;
 
     const parsed = JSON.parse(text); // JSON 형식이 깨졌으면 catch로 떨어짐
 
-    // AI가 목록에 없는 감정을 답하면 기본값으로 교정 (예외 감정 차단)
-    const emotion = EMOTIONS.includes(parsed.emotion) ? parsed.emotion : '그저 그런 날';
+    // AI가 목록에 없는 감정을 답하면 단어 추정으로 교정 (예외 감정 차단)
+    const emotion = EMOTIONS.includes(parsed.emotion) ? parsed.emotion : guessEmotion(content);
     const title = (parsed.title || fallback.title).slice(0, 30);
 
     // 키워드 정리: 배열인지 확인, # 제거, 너무 긴 것 자르기, 최대 3개
@@ -131,7 +152,9 @@ ${diaryLines.join('\n')}`;
       signal: AbortSignal.timeout(30000), // 30초 안에 답이 없으면 포기 -> 안내 메시지
     });
     if (!res.ok) {
-      console.error('Gemini 회고 오류:', res.status, await res.text());
+      const body = await res.text();
+      console.error('Gemini 회고 오류:', res.status, body);
+      lastStoryError = `HTTP ${res.status} ${body.slice(0, 200)}`;
       return null;
     }
     const data = await res.json();
@@ -141,8 +164,13 @@ ${diaryLines.join('\n')}`;
     return (parsed.story || '').trim() || null;
   } catch (err) {
     console.error('Gemini 회고 실패:', err.message);
+    lastStoryError = '예외: ' + err.message;
     return null;
   }
 }
 
-module.exports = { analyzeDiary, writeStory, EMOTIONS };
+// 가장 최근 회고 실패 사유 (진단용)
+let lastStoryError = null;
+function getLastStoryError() { return lastStoryError; }
+
+module.exports = { analyzeDiary, writeStory, EMOTIONS, getLastStoryError };

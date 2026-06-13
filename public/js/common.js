@@ -12,13 +12,13 @@ const EMOTION_COLORS = {
   '불안': '#9775FA',
   '화남': '#E8590C',
   '지침': '#8D6E63',
-  '그저 그런 날': '#ADB5BD',
+  '평범': '#ADB5BD',
 };
 const EMOTION_LIST = Object.keys(EMOTION_COLORS);
 
 // 감정 이름으로 색을 얻는 함수 (모르는 값이면 회색)
 function emotionColor(emotion) {
-  return EMOTION_COLORS[emotion] || EMOTION_COLORS['그저 그런 날'];
+  return EMOTION_COLORS[emotion] || EMOTION_COLORS['평범'];
 }
 
 // ===== 감정 선택기 (색 원 + 이름) =====
@@ -80,13 +80,13 @@ const FACES = {
   '지침': `<path d="M -17 -9 l 12 4" class="f"/><path d="M 17 -9 l -12 4" class="f"/>
            <ellipse cx="0" cy="13" rx="6" ry="7" class="d"/>
            <path d="M 20 -17 q 7 10 0 14 q -7 -4 0 -14" fill="#CFE8FF"/>`,
-  '그저 그런 날': `<circle cx="-10" cy="-6" r="4" class="d"/><circle cx="10" cy="-6" r="4" class="d"/>
+  '평범': `<circle cx="-10" cy="-6" r="4" class="d"/><circle cx="10" cy="-6" r="4" class="d"/>
            <path d="M -8 11 l 16 0" class="f"/>`,
 };
 // 이목구비 색: 배경색의 어두운 버전 (사랑은 흰색이라 예외)
 const DARK = {
   '기쁨': '#5C4A00', '사랑': '#8B1020', '설렘': '#7A2E55', '평온': '#0B4D1C', '슬픔': '#06335C',
-  '불안': '#2E1A66', '화남': '#4A1A00', '지침': '#2E1F1A', '그저 그런 날': '#3A4046',
+  '불안': '#2E1A66', '화남': '#4A1A00', '지침': '#2E1F1A', '평범': '#3A4046',
 };
 // 얼굴 눈코입(표정) 색 = DARK와 동일 (사랑도 이제 다른 감정처럼 진한 색)
 const FEATURE = DARK;
@@ -116,7 +116,7 @@ function faceSVG(emotion, size, badge, borderColor) {
   return `<svg width="${size}" height="${size}" viewBox="-44 -44 88 88" xmlns="http://www.w3.org/2000/svg" style="display:block">
     <style>.f{stroke:${dk};stroke-width:3.5;fill:none;stroke-linecap:round}.d{fill:${dk}}</style>
     <circle r="34" fill="${c}" stroke="${border}" stroke-width="5"/>
-    <g>${FACES[emotion] || FACES['그저 그런 날']}</g>
+    <g>${FACES[emotion] || FACES['평범']}</g>
     ${badgeSvg}
   </svg>`;
 }
@@ -126,12 +126,12 @@ function featuresSVG(emotion, size) {
   const dk = FEATURE[emotion] || '#FFFFFF'; // 눈코입 색 (사랑=검정, 나머지=흰색)
   return `<svg width="${size}" height="${size}" viewBox="-44 -44 88 88" xmlns="http://www.w3.org/2000/svg" style="display:block">
     <style>.f{stroke:${dk};stroke-width:4;fill:none;stroke-linecap:round}.d{fill:${dk}}</style>
-    <g>${FACES[emotion] || FACES['그저 그런 날']}</g>
+    <g>${FACES[emotion] || FACES['평범']}</g>
   </svg>`;
 }
 
 // 감정 우선순위: 빈도가 같을 때 어느 표정을 보여줄지 (긍정 먼저, 부정 나중)
-const EMOTION_PRIORITY = ['기쁨', '사랑', '설렘', '평온', '그저 그런 날', '슬픔', '불안', '지침', '화남'];
+const EMOTION_PRIORITY = ['기쁨', '사랑', '설렘', '평온', '평범', '슬픔', '불안', '지침', '화남'];
 
 // 목록에서 대표 감정 = 빈도가 가장 높은 감정 (동률이면 우선순위 높은 것)
 function dominantEmotion(list) {
@@ -239,7 +239,7 @@ async function renderNav(active) {
   filterBox.innerHTML = `
     <button type="button" class="fdrop-btn" id="fdropBtn">기간 <span class="arr">▾</span></button>
     <div class="fdrop-menu" id="fdropMenu">
-      <button data-mode="all">전체</button>
+      <button data-mode="all">전체 (기본)</button>
       <button data-mode="1m">최근 1개월</button>
       <button data-mode="3m">최근 3개월</button>
       <button data-mode="6m">최근 6개월</button>
@@ -405,10 +405,11 @@ function aiLoaderHTML(text) {
           <stop offset="0" stop-color="#7CF7D4" stop-opacity=".8"/><stop offset="1" stop-color="#1B8BFF" stop-opacity=".08"/>
         </linearGradient>
       </defs>
-      <g class="bw b2"><path fill="url(#aib2)" d="M0 70 C 70 42, 130 42, 200 70 C 270 98, 330 98, 400 70 C 470 42, 530 42, 600 70 C 670 98, 730 98, 800 70 L800 110 L0 110 Z"/></g>
-      <g class="bw b3"><path fill="url(#aib3)" d="M0 64 C 60 90, 140 90, 200 64 C 260 38, 340 38, 400 64 C 460 90, 540 90, 600 64 C 660 38, 740 38, 800 64 L800 110 L0 110 Z"/></g>
-      <g class="bw b1"><path fill="url(#aib1)" d="M0 60 C 60 28, 140 28, 200 60 C 260 92, 340 92, 400 60 C 460 28, 540 28, 600 60 C 660 92, 740 92, 800 60 L800 110 L0 110 Z"/></g>
-      <g class="bw crest"><path fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" d="M0 60 C 60 28, 140 28, 200 60 C 260 92, 340 92, 400 60 C 460 28, 540 28, 600 60 C 660 92, 740 92, 800 60"/></g>
+      <!-- 채운 면(아래 평평한 직선) 대신 굵은 곡선 띠로 -> 위아래 모두 부드러운 물결 -->
+      <g class="bw b2"><path fill="none" stroke="url(#aib2)" stroke-width="30" stroke-linecap="round" d="M-40 70 C 30 42, 100 42, 170 70 C 240 98, 310 98, 380 70 C 450 42, 520 42, 590 70 C 660 98, 730 98, 800 70 C 870 42, 940 42, 1010 70"/></g>
+      <g class="bw b3"><path fill="none" stroke="url(#aib3)" stroke-width="26" stroke-linecap="round" d="M-40 62 C 30 88, 100 88, 170 62 C 240 36, 310 36, 380 62 C 450 88, 520 88, 590 62 C 660 36, 730 36, 800 62 C 870 88, 940 88, 1010 62"/></g>
+      <g class="bw b1"><path fill="none" stroke="url(#aib1)" stroke-width="22" stroke-linecap="round" d="M-40 56 C 30 26, 100 26, 170 56 C 240 86, 310 86, 380 56 C 450 26, 520 26, 590 56 C 660 86, 730 86, 800 56 C 870 26, 940 26, 1010 56"/></g>
+      <g class="bw crest"><path fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" d="M-40 56 C 30 26, 100 26, 170 56 C 240 86, 310 86, 380 56 C 450 26, 520 26, 590 56 C 660 86, 730 86, 800 56 C 870 26, 940 26, 1010 56"/></g>
     </svg>
     <p class="ai-loading-text">${text}</p>
   </div>`;
@@ -427,11 +428,13 @@ function wireStory(title, ids, btnId = 'storyBtn', boxId = 'storyBox') {
 
   btn.onclick = async () => {
     // 버튼을 숨기고 물결 연출 시작
+    // (display:block을 켜기 "전에" loading 상태 + 내용을 먼저 채워서
+    //  테두리·여백만 있는 빈 박스가 한 프레임 깜빡이는 걸 방지)
     btn.style.display = 'none';
-    box.style.display = 'block';
-    box.classList.add('loading');
     box.classList.remove('reveal');
+    box.classList.add('loading');
     box.innerHTML = aiLoaderHTML('AI가 기억을 읽고 있어요');
+    box.style.display = 'block';
 
     // 진행 문구가 단계별로 바뀜 (AI가 일하고 있다는 느낌)
     const phases = ['감정의 흐름을 따라가는 중', '문장을 고르고 있어요', '거의 다 됐어요'];
