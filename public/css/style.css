@@ -734,15 +734,29 @@ body.panel-collapsed .panel { padding-left: 0; padding-right: 0; border-left: no
   .el-row .el-name { font-size: 12px; }
   .el-row .el-cnt { font-size: 11px; }
 
-  /* 오른쪽 패널: 화면 우측에서 슬라이드 인하는 "전체 높이 시트".
-     position:fixed + dvh 라서 부모 높이/스크롤과 무관하게 항상 안정적으로 꽉 참 */
+  /* 패널: 아래에서 올라오는 "바텀시트". 화면 위쪽(지도/달력)은 그대로 보이고
+     아래 70~80%만 시트로 덮음. position:fixed + dvh 라 부모 높이와 무관하게 안정적. */
   .panel {
-    position: fixed; top: 0; right: 0; height: 100vh; height: 100dvh;
-    width: min(90vw, 400px); max-width: 92vw; z-index: 500; border-radius: 0;
-    box-shadow: -8px 0 28px rgba(80, 65, 50, .22);
-    transform: translateX(100%); transition: transform .25s ease;
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; max-width: 100%;
+    height: auto; max-height: 80dvh; /* 내용이 길면 시트 안에서 스크롤 */
+    z-index: 500; border-radius: 20px 20px 0 0;
+    box-shadow: 0 -12px 32px rgba(80, 65, 50, .3);
+    transform: translateY(100%); transition: transform .28s ease;
+    padding: 0 18px 28px; /* 위 여백은 sticky 헤더가 담당 */
   }
-  .map-layout.panel-open .panel { transform: translateX(0); }
+  .map-layout.panel-open .panel { transform: translateY(0); }
+
+  /* 시트 상단: 제목+닫기를 고정(sticky)하고, 가운데 손잡이 막대 표시 */
+  .panel .panel-head {
+    position: sticky; top: 0; z-index: 2; background: var(--accent);
+    padding: 16px 0 10px; margin-bottom: 4px;
+  }
+  .panel .panel-head::before {
+    content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+    width: 42px; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .4);
+  }
+
   /* 마커/날짜를 누르면 패널이 자동으로 열림 -> 바깥 토글은 숨김 (패널 안 ✕로 닫음) */
   .panel-toggle { display: none; }
 }
