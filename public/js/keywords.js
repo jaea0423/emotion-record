@@ -61,8 +61,15 @@ function render() {
       location.href = '/index.html';
     };
 
-    // ----- 모바일: 흐름(wrap) 배치 — 위치 계산 없이 그냥 추가하면 CSS가 정렬 + 스크롤 -----
+    // ----- 모바일: 흐름(wrap) 배치 + 칩마다 다른 흔들림으로 "자유분방하지만 정돈된" 느낌 -----
     if (isMobile) {
+      // sin 기반 = 물결처럼 부드러운 흐름(균형), 모듈러 여백 = 들쭉날쭉함(불균형)
+      const jy = (Math.sin(i * 1.7) * 11).toFixed(1);          // 세로 -11~11px
+      const rot = (Math.sin(i * 2.3) * 3).toFixed(1);          // 회전 -3~3도
+      const mTop = 4 + (i * 5) % 10;                           // 위아래 여백 4~13px
+      const mSide = 3 + (i * 7) % 10;                          // 좌우 여백 3~12px
+      el.style.transform = `translateY(${jy}px) rotate(${rot}deg)`;
+      el.style.margin = `${mTop}px ${mSide}px`;
       box.appendChild(el);
       return;
     }
