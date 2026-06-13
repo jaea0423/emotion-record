@@ -1,6 +1,15 @@
 // common.js - 모든 페이지에서 함께 쓰는 공통 코드
 // (감정 색/표정, API 래퍼, 내비게이션 + 기간 필터, 카카오 SDK 로더)
 
+// 탭 아이콘(파비콘): 발자국 이모지를 SVG로 — 모든 페이지가 common.js를 불러오므로 한 곳에서 처리
+(function () {
+  if (document.querySelector('link[rel="icon"]')) return;
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👣</text></svg>";
+  document.head.appendChild(link);
+})();
+
 // ================= 감정 데이터 =================
 // 감정 -> 색상 매핑 (백엔드 ai.js의 EMOTIONS와 반드시 일치해야 함)
 const EMOTION_COLORS = {
@@ -207,7 +216,7 @@ const NAV_ICONS = {
 
 // ================= 화면 공통 뼈대 =================
 // 영역 이름: 좌측 패널(감정 목록) / 우측 패널(기억 목록) / 메인 패널(지도·내용)
-//  - 중앙 상단: "감정 기록" 로고
+//  - 중앙 상단: "기억의 발자국" 로고
 //  - 메인 패널 좌측 상단: [기간] 버튼 (누르면 메뉴)
 //  - 메인 패널 우측 상단: [사용자] 버튼 (누르면 로그아웃)
 //  - 메인 패널 좌/우측 하단: [앨범] / [음악]

@@ -1,4 +1,4 @@
-/* style.css - "감정 기록" 클린 & 큐트 테마
+/* style.css - "기억의 발자국" 클린 & 큐트 테마
    제목: Jua(둥근 귀여운 폰트) / 본문: Noto Sans KR(깔끔한 고딕) */
 
 /* 색상은 CSS 변수로 한 곳에서 관리 */
@@ -756,6 +756,8 @@ body.panel-collapsed .panel { padding-left: 0; padding-right: 0; border-left: no
   .panel-placeholder { padding-top: 30px; }
   .page { margin-top: 84px; }
 
+  /* 캘린더: 좁은 화면에선 좌우 여백을 줄여 달력이 화면을 더 쓰게 */
+  .cal-main { padding: 76px 12px 96px; }
   /* 캘린더: 칸을 작게, 표정도 작게 */
   .cal-grid { gap: 4px; }
   .cal-cell { min-height: 64px; padding: 5px; font-size: 13px; border-radius: 9px; }
