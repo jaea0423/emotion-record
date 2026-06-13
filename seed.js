@@ -1,18 +1,18 @@
 // seed.js - 시연 편의성을 위한 더미 데이터 (교수님 채점/시연용)
 // 페르소나: 강원대 춘천캠 컴퓨터공학과 23학번, 2026년 6월 현재 3학년
-// 실행: npm run seed  /  데모 계정: demo / 1234
+// 실행: npm run seed  /  데모 계정: test / 1234
 // 전국 232개 기록 (캠퍼스 46 + 춘천 20 + 서울 40 + 수원 30 + 7도시 76 + 특별 20)
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 
-const exists = db.prepare("SELECT id FROM users WHERE username = 'demo'").get();
+const exists = db.prepare("SELECT id FROM users WHERE username = 'test'").get();
 if (exists) {
-  console.log('demo 계정이 이미 있습니다. memory.db 파일을 지우고 다시 실행하면 초기화됩니다.');
+  console.log('test 계정이 이미 있습니다. memory.db 파일을 지우고 다시 실행하면 초기화됩니다.');
   process.exit(0);
 }
 
 const hash = bcrypt.hashSync('1234', 10);
-const user = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('demo', hash);
+const user = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('test', hash);
 const uid = user.lastInsertRowid;
 
 // [장소, 주소, 위도, 경도, 본문, 제목, 감정, 날짜, 키워드(쉼표구분)]
@@ -260,5 +260,5 @@ for (const d of diaries) {
   insert.run(uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null);
 }
 
-console.log(`완료! demo 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다.`);
+console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다.`);
 console.log('(강원대 춘천캠 23학번 페르소나 / 사진·음악은 직접 추가하세요)');
