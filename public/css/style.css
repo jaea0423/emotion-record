@@ -75,6 +75,8 @@ body:not(.has-side-panels) .topbar {
 /* 로고 뒤로 점점 진해지며 걸어가는 작은 발자국 트레일 */
 .logo-trail { display: inline-flex; align-items: center; margin-left: 7px; }
 .logo-trail svg { display: block; }
+/* 로그인 큰 제목용: 발자국을 글자 가운데 높이에 맞춰 살짝 띄움 */
+.logo-trail-lg { margin-left: 10px; vertical-align: middle; }
 
 /* 뒤로가기 버튼 (지도 외 화면의 좌측 상단) */
 .back-btn {

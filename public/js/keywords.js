@@ -102,7 +102,7 @@ function render() {
   });
 }
 
-// 두 색(hex) 사이를 t(0~1)만큼 섞음 — 빈도에 따른 노랑 그라데이션용
+// 두 색(hex) 사이를 t(0~1)만큼 섞음 — 빈도에 따른 네이비 그라데이션용
 function mixColor(c1, c2, t) {
   const p = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
   const [r1, g1, b1] = p(c1), [r2, g2, b2] = p(c2);

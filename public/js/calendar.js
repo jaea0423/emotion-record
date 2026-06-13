@@ -33,7 +33,7 @@ window.applyFilter = () => {
   closePanel();
 };
 
-// ----- 패널 접기/펼치기 (지도와 동일하게 --panel-w가 0이 되어 정렬이 따라 움직임) -----
+// ----- 패널 접기/펼치기 (지도와 동일하게 --panel-gap이 0이 되어 정렬이 따라 움직임) -----
 function setPanelCollapsed(collapsed) {
   document.body.classList.toggle('panel-collapsed', collapsed);
   const t = document.getElementById('panelToggle');

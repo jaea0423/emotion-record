@@ -42,8 +42,8 @@ async function geminiGenerate(body, timeoutMs, tries = 3) {
 
 // 실패를 사용자에게 보여 줄 친절한 한 줄로 (원시 오류는 서버 콘솔에만)
 function friendlyAiError(status) {
-  if (status === 429 || status === 503) return 'AI 서버가 잠시 혼잡해요. 잠시 후 다시 시도해 주세요.';
-  if (status === 0) return '응답이 늦어 잠시 끊겼어요. 잠시 후 다시 시도해 주세요.';
+  if (status === 429 || status === 503) return 'AI 서버가 지금 조금 혼잡해요. 잠시 후 다시 시도해 주세요.';
+  if (status === 0) return '응답이 늦어 잠깐 끊겼어요. 잠시 후 다시 시도해 주세요.';
   return 'AI 응답에 문제가 있었어요. 잠시 후 다시 시도해 주세요.';
 }
 
