@@ -176,15 +176,24 @@ router.get('/:id', (req, res) => {
   res.json(row);
 });
 
-// ---------- 일기 수정 (제목 + 감정) ----------
-// AI의 판단은 참고일 뿐 -- 사용자가 제목(요약)과 감정을 직접 고칠 수 있음
-// [PUT] /api/diaries/:id   body: { ai_title?, emotion? } (둘 중 하나만 보내도 됨)
+// ---------- 일기 수정 ----------
+// AI의 판단은 참고일 뿐 -- 제목/감정/본문/키워드/장소/날짜를 직접 고칠 수 있음
+// [PUT] /api/diaries/:id   body: { ai_title?, emotion?, content?, keywords?, place_name?, diary_date? }
+// (보낸 항목만 부분 수정됨)
 router.put('/:id', (req, res) => {
-  const { ai_title, emotion } = req.body;
+  const { ai_title, emotion, content, keywords, place_name, diary_date } = req.body;
 
   // 감정이 왔다면 9가지 목록 안에 있는지 검증 (예외 감정 차단)
   if (emotion !== undefined && !EMOTIONS.includes(emotion)) {
     return res.status(400).json({ error: '잘못된 감정 값입니다.' });
+  }
+  // 본문이 왔다면 최소 길이 검증
+  if (content !== undefined && content.trim().length < 5) {
+    return res.status(400).json({ error: '일기를 5자 이상 적어 주세요.' });
+  }
+  // 날짜가 왔다면 형식(YYYY-MM-DD) 검증
+  if (diary_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(diary_date)) {
+    return res.status(400).json({ error: '날짜 형식이 올바르지 않습니다.' });
   }
 
   // 보낸 값만 골라서 UPDATE 문을 동적으로 조립
@@ -197,6 +206,24 @@ router.put('/:id', (req, res) => {
   if (emotion) {
     sets.push('emotion = ?');
     values.push(emotion);
+  }
+  if (typeof content === 'string' && content.trim()) {
+    sets.push('content = ?');
+    values.push(content.trim());
+  }
+  if (keywords !== undefined) {
+    // 키워드: 쉼표 구분, # 제거, 최대 5개. 비우면 키워드 없음(null)
+    const list = String(keywords).split(',').map((k) => k.replace(/^#/, '').trim().slice(0, 12)).filter(Boolean).slice(0, 5);
+    sets.push('keywords = ?');
+    values.push(list.length ? list.join(',') : null);
+  }
+  if (typeof place_name === 'string' && place_name.trim()) {
+    sets.push('place_name = ?');
+    values.push(place_name.trim().slice(0, 60));
+  }
+  if (diary_date) {
+    sets.push('diary_date = ?');
+    values.push(diary_date);
   }
   if (sets.length === 0) return res.status(400).json({ error: '수정할 내용이 없습니다.' });
 

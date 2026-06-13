@@ -21,13 +21,48 @@ function emotionColor(emotion) {
   return EMOTION_COLORS[emotion] || EMOTION_COLORS['그저 그런 날'];
 }
 
+// ===== 감정 선택기 (색 원 + 이름) =====
+// 네이티브 <select>는 옵션마다 색 동그라미를 못 넣어서 커스텀 드롭다운으로 만듦
+function emotionDot(e) { return `<span class="emo-cdot" style="background:${emotionColor(e)}"></span>`; }
+
+// id를 가진 선택기 HTML을 돌려줌 (선택값은 box.dataset.val 에 보관)
+function emotionPickerHTML(id, selected) {
+  return `<div class="emo-pick" id="${id}" data-val="${selected}">
+    <button type="button" class="emo-pick-btn">${emotionDot(selected)}<span class="epb-name">${selected}</span><span class="arr">▾</span></button>
+    <div class="emo-pick-menu">
+      ${EMOTION_LIST.map((e) => `<button type="button" data-emo="${e}" class="${e === selected ? 'on' : ''}">${emotionDot(e)}${e}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+// 선택기 동작 연결 (메뉴 열고 닫기, 선택 시 버튼 갱신)
+function wireEmotionPicker(id, onChange) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  const btn = box.querySelector('.emo-pick-btn');
+  const menu = box.querySelector('.emo-pick-menu');
+  btn.onclick = (e) => { e.stopPropagation(); menu.classList.toggle('open'); };
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  box.querySelectorAll('[data-emo]').forEach((b) => {
+    b.onclick = () => {
+      const e = b.dataset.emo;
+      box.dataset.val = e;
+      btn.innerHTML = `${emotionDot(e)}<span class="epb-name">${e}</span><span class="arr">▾</span>`;
+      box.querySelectorAll('[data-emo]').forEach((x) => x.classList.toggle('on', x.dataset.emo === e));
+      menu.classList.remove('open');
+      if (onChange) onChange(e);
+    };
+  });
+}
+function getEmotionPick(id) { const b = document.getElementById(id); return b ? b.dataset.val : null; }
+
 // ===== 감정별 이목구비 (viewBox -44~44 기준, 마커와 캘린더가 함께 사용) =====
 const FACES = {
   '기쁨': `<path d="M -16 -6 q 6 -8 12 0" class="f"/><path d="M 4 -6 q 6 -8 12 0" class="f"/>
            <path d="M -12 8 q 12 14 24 0" class="f"/>`,
-  '사랑': `<path d="M -10 -10 c -3 -6 -12 -3 -9 4 c 2 4 9 8 9 8 c 0 0 7 -4 9 -8 c 3 -7 -6 -10 -9 -4 Z" fill="#fff"/>
-           <path d="M 10 -10 c -3 -6 -12 -3 -9 4 c 2 4 9 8 9 8 c 0 0 7 -4 9 -8 c 3 -7 -6 -10 -9 -4 Z" fill="#fff"/>
-           <path d="M -8 12 q 8 8 16 0" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
+  '사랑': `<path d="M -10 -10 c -3 -6 -12 -3 -9 4 c 2 4 9 8 9 8 c 0 0 7 -4 9 -8 c 3 -7 -6 -10 -9 -4 Z" fill="#8B1020"/>
+           <path d="M 10 -10 c -3 -6 -12 -3 -9 4 c 2 4 9 8 9 8 c 0 0 7 -4 9 -8 c 3 -7 -6 -10 -9 -4 Z" fill="#8B1020"/>
+           <path d="M -8 12 q 8 8 16 0" stroke="#8B1020" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
   '설렘': `<circle cx="-10" cy="-6" r="4" class="d"/><circle cx="10" cy="-6" r="4" class="d"/>
            <circle cx="-18" cy="5" r="5.5" fill="#fff" opacity=".5"/><circle cx="18" cy="5" r="5.5" fill="#fff" opacity=".5"/>
            <path d="M -6 10 q 6 7 12 0" class="f"/>`,
@@ -50,9 +85,11 @@ const FACES = {
 };
 // 이목구비 색: 배경색의 어두운 버전 (사랑은 흰색이라 예외)
 const DARK = {
-  '기쁨': '#5C4A00', '사랑': '#FFFFFF', '설렘': '#7A2E55', '평온': '#0B4D1C', '슬픔': '#06335C',
+  '기쁨': '#5C4A00', '사랑': '#8B1020', '설렘': '#7A2E55', '평온': '#0B4D1C', '슬픔': '#06335C',
   '불안': '#2E1A66', '화남': '#4A1A00', '지침': '#2E1F1A', '그저 그런 날': '#3A4046',
 };
+// 얼굴 눈코입(표정) 색 = DARK와 동일 (사랑도 이제 다른 감정처럼 진한 색)
+const FEATURE = DARK;
 
 // 뱃지(개수)용 색: 기본은 이목구비 색과 같지만,
 // '사랑'은 이목구비가 흰색이라 흰 뱃지 위에서 안 보임 -> 진한 빨강으로 대체
@@ -61,9 +98,10 @@ function badgeColor(emotion) { return BADGE_DARK[emotion] || '#3A4046'; }
 
 // ===== 둥근 스티커 얼굴 SVG (지도 마커, 범례, 뱃지용) =====
 // size: 픽셀 크기 / badge: 일기 개수 뱃지(2개 이상일 때만 표시)
-function faceSVG(emotion, size, badge) {
+function faceSVG(emotion, size, badge, borderColor) {
   const c = emotionColor(emotion);
-  const dk = DARK[emotion] || '#3A4046';
+  const dk = FEATURE[emotion] || '#FFFFFF'; // 눈코입 색 (사랑=검정, 나머지=흰색)
+  const border = borderColor || '#FFFDF6';  // 마커 테두리 (선택된 마커는 검정으로)
   const bdk = badgeColor(emotion); // 뱃지는 항상 잘 보이는 진한 색으로
   // 뱃지: 자릿수에 따라 폭이 늘어나는 알약 모양 (3자리 숫자도 안 넘침)
   let badgeSvg = '';
@@ -77,7 +115,7 @@ function faceSVG(emotion, size, badge) {
   }
   return `<svg width="${size}" height="${size}" viewBox="-44 -44 88 88" xmlns="http://www.w3.org/2000/svg" style="display:block">
     <style>.f{stroke:${dk};stroke-width:3.5;fill:none;stroke-linecap:round}.d{fill:${dk}}</style>
-    <circle r="34" fill="${c}" stroke="#FFFDF6" stroke-width="5"/>
+    <circle r="34" fill="${c}" stroke="${border}" stroke-width="5"/>
     <g>${FACES[emotion] || FACES['그저 그런 날']}</g>
     ${badgeSvg}
   </svg>`;
@@ -85,7 +123,7 @@ function faceSVG(emotion, size, badge) {
 
 // ===== 윤곽 없는 이목구비만 (캘린더의 네모 얼굴용) =====
 function featuresSVG(emotion, size) {
-  const dk = DARK[emotion] || '#3A4046';
+  const dk = FEATURE[emotion] || '#FFFFFF'; // 눈코입 색 (사랑=검정, 나머지=흰색)
   return `<svg width="${size}" height="${size}" viewBox="-44 -44 88 88" xmlns="http://www.w3.org/2000/svg" style="display:block">
     <style>.f{stroke:${dk};stroke-width:4;fill:none;stroke-linecap:round}.d{fill:${dk}}</style>
     <g>${FACES[emotion] || FACES['그저 그런 날']}</g>
@@ -177,6 +215,7 @@ const NAV_ICONS = {
 async function renderNav(active) {
   let me = null;
   try { me = await api('/api/auth/me'); } catch (e) { return; } // 미로그인 시 api()가 리다이렉트
+  if (!me) return; // 세션이 풀려 로그인 페이지로 넘어가는 중이면 여기서 멈춤
 
   // 지도 페이지(좌/우 패널 있음)에서는 모서리 버튼들을 메인 패널 기준으로 배치
   const hasSidePanels = !!document.querySelector('.map-layout');

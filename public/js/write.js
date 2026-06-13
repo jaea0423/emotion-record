@@ -270,9 +270,7 @@ function showProposal(ai) {
     <div id="resFace" style="display:flex; justify-content:center; margin:14px 0;">${faceSVG(ai.emotion, 72, 0)}</div>
     <input id="resTitle" value="${esc(ai.title)}">
     <div style="display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
-      <select id="resEmo" style="width:auto;">
-        ${EMOTION_LIST.map((e) => `<option ${e === ai.emotion ? 'selected' : ''}>${e}</option>`).join('')}
-      </select>
+      ${emotionPickerHTML('resEmo', ai.emotion)}
     </div>
     <div class="kw-chips" id="kwEdit" style="justify-content:center; margin-top:14px;"></div>
     <input id="kwInput" placeholder="키워드 직접 추가하고 Enter (최대 5개)"
@@ -283,9 +281,9 @@ function showProposal(ai) {
   card.scrollIntoView({ behavior: 'smooth' });
 
   // 감정을 바꾸면 얼굴 미리보기도 바로 바뀜
-  document.getElementById('resEmo').onchange = function () {
-    document.getElementById('resFace').innerHTML = faceSVG(this.value, 72, 0);
-  };
+  wireEmotionPicker('resEmo', (e) => {
+    document.getElementById('resFace').innerHTML = faceSVG(e, 72, 0);
+  });
 
   // ----- 키워드 편집: AI 제안 + 직접 추가(✕로 빼기) -----
   kwList = (ai.keywords || []).slice(0, 5);
@@ -335,7 +333,7 @@ async function doSave() {
 
   // 사용자가 확정한 제목/감정/키워드 (서버는 이 값을 그대로 저장)
   fd.append('ai_title', document.getElementById('resTitle').value.trim());
-  fd.append('emotion', document.getElementById('resEmo').value);
+  fd.append('emotion', getEmotionPick('resEmo'));
   fd.append('keywords', kwList.join(',')); // 편집(추가/삭제)된 키워드 그대로
 
   const photo = photoInput.files[0];
