@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('node:crypto');
-const db = require('../db');
+const { q } = require('../db');
 const { analyzeDiary, writeStory, EMOTIONS, getLastStoryError } = require('../ai');
 
 const router = express.Router();
@@ -74,9 +74,10 @@ router.post('/story', async (req, res) => {
 
   // 내 일기만 골라옴 (남의 일기 id를 보내도 무시됨)
   const placeholders = ids.map(() => '?').join(',');
-  const rows = db
-    .prepare(`SELECT * FROM diaries WHERE id IN (${placeholders}) AND user_id = ? ORDER BY diary_date`)
-    .all(...ids, req.session.userId);
+  const rows = await q.all(
+    `SELECT * FROM diaries WHERE id IN (${placeholders}) AND user_id = ? ORDER BY diary_date`,
+    [...ids, req.session.userId]
+  );
   if (rows.length === 0) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
 
   // 너무 많으면 최신 30개만 사용 (프롬프트가 길어지는 것 방지)
@@ -87,7 +88,7 @@ router.post('/story', async (req, res) => {
     .update((title || '') + '|' + used.map((r) => `${r.id}:${r.emotion}:${r.ai_title}`).join('|'))
     .digest('hex');
 
-  const hit = db.prepare('SELECT story FROM stories WHERE user_id = ? AND cache_key = ?').get(req.session.userId, key);
+  const hit = await q.get('SELECT story FROM stories WHERE user_id = ? AND cache_key = ?', [req.session.userId, key]);
   if (hit) return res.json({ story: hit.story, cached: true });
 
   // 일기당 앞 150자를 AI에게 전달 (너무 짧으면 맥락 누락, 너무 길면 프롬프트 낭비)
@@ -95,16 +96,17 @@ router.post('/story', async (req, res) => {
   const story = await writeStory(title || '이 곳', lines);
   if (!story) return res.status(503).json({ error: 'AI가 이야기를 만들지 못했어요. (사유: ' + (getLastStoryError() || '알 수 없음') + ')' });
 
-  db.prepare('INSERT INTO stories (user_id, cache_key, story) VALUES (?, ?, ?)').run(req.session.userId, key, story);
+  await q.run('INSERT INTO stories (user_id, cache_key, story) VALUES (?, ?, ?)', [req.session.userId, key, story]);
   res.json({ story, cached: false });
 });
 
 // ---------- 일기 목록 ----------
 // [GET] /api/diaries - 내 일기 전부 (지도/캘린더에서 사용)
-router.get('/', (req, res) => {
-  const rows = db
-    .prepare('SELECT * FROM diaries WHERE user_id = ? ORDER BY diary_date DESC, id DESC')
-    .all(req.session.userId);
+router.get('/', async (req, res) => {
+  const rows = await q.all(
+    'SELECT * FROM diaries WHERE user_id = ? ORDER BY diary_date DESC, id DESC',
+    [req.session.userId]
+  );
   res.json(rows);
 });
 
@@ -148,30 +150,28 @@ router.post('/', (req, res, next) => {
     ai = await analyzeDiary(content); // (실패하면 fallback이 자동 적용됨)
   }
 
-  const result = db
-    .prepare(`INSERT INTO diaries
+  // INSERT 후 방금 저장된 행을 RETURNING *로 바로 돌려받음
+  const saved = await q.get(`INSERT INTO diaries
       (user_id, place_name, address, lat, lng, content, ai_title, emotion,
        photo_path, music_url, music_title, music_thumbnail, keywords, diary_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+    [
       req.session.userId, place_name, address || '', Number(lat), Number(lng),
       content, ai.title, ai.emotion,
       req.file ? '/uploads/' + req.file.filename : null,
       music_url || null, music_title || null, music_thumbnail || null,
       ai.keywords && ai.keywords.length ? ai.keywords.join(',') : null, // 키워드 (쉼표 구분)
-      diary_date
-    );
+      diary_date,
+    ]
+  );
 
-  const saved = db.prepare('SELECT * FROM diaries WHERE id = ?').get(result.lastInsertRowid);
   // fromAI가 false면 프론트에서 "AI 분석에 실패해 기본값으로 저장됨"을 안내
   res.json({ ...saved, fromAI: ai.fromAI });
 });
 
 // ---------- 일기 하나 조회 ----------
-router.get('/:id', (req, res) => {
-  const row = db
-    .prepare('SELECT * FROM diaries WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.session.userId);
+router.get('/:id', async (req, res) => {
+  const row = await q.get('SELECT * FROM diaries WHERE id = ? AND user_id = ?', [req.params.id, req.session.userId]);
   if (!row) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
   res.json(row);
 });
@@ -180,7 +180,7 @@ router.get('/:id', (req, res) => {
 // AI의 판단은 참고일 뿐 -- 제목/감정/본문/키워드/장소/날짜를 직접 고칠 수 있음
 // [PUT] /api/diaries/:id   body: { ai_title?, emotion?, content?, keywords?, place_name?, diary_date? }
 // (보낸 항목만 부분 수정됨)
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { ai_title, emotion, content, keywords, place_name, diary_date } = req.body;
 
   // 감정이 왔다면 9가지 목록 안에 있는지 검증 (예외 감정 차단)
@@ -227,23 +227,23 @@ router.put('/:id', (req, res) => {
   }
   if (sets.length === 0) return res.status(400).json({ error: '수정할 내용이 없습니다.' });
 
-  const result = db
-    .prepare(`UPDATE diaries SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`)
-    .run(...values, req.params.id, req.session.userId);
-  if (result.changes === 0) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
+  const result = await q.run(
+    `UPDATE diaries SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`,
+    [...values, req.params.id, req.session.userId]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
 
   // 수정된 최신 일기를 그대로 돌려줌 (프론트가 화면 갱신에 사용)
-  res.json(db.prepare('SELECT * FROM diaries WHERE id = ?').get(req.params.id));
+  res.json(await q.get('SELECT * FROM diaries WHERE id = ?', [req.params.id]));
 });
 
 // ---------- 일기 삭제 ----------
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   // 사진 파일도 같이 지우기 위해 먼저 조회
-  const row = db.prepare('SELECT photo_path FROM diaries WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.session.userId);
+  const row = await q.get('SELECT photo_path FROM diaries WHERE id = ? AND user_id = ?', [req.params.id, req.session.userId]);
   if (!row) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
 
-  db.prepare('DELETE FROM diaries WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
+  await q.run('DELETE FROM diaries WHERE id = ? AND user_id = ?', [req.params.id, req.session.userId]);
 
   // 업로드된 사진이 있으면 파일도 삭제 (없어도 에러 안 나게 try)
   if (row.photo_path) {

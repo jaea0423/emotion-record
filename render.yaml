@@ -14,11 +14,13 @@ services:
     startCommand: node seed.js; node server.js
     envVars:
       - key: NODE_VERSION
-        value: 22.22.3            # node:sqlite가 플래그 없이 동작하는 버전 (로컬과 동일)
+        value: 22.22.3            # 로컬과 동일한 Node 버전
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: SESSION_SECRET
         generateValue: true       # Render가 무작위 비밀 문자열을 자동 생성
+      - key: DATABASE_URL
+        sync: false               # Neon PostgreSQL 연결 문자열 (대시보드에서 직접 입력)
       - key: KAKAO_JS_KEY
         sync: false               # 대시보드에서 직접 입력 (깃/코드에 안 올라감)
       - key: GEMINI_API_KEY

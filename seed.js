@@ -3,17 +3,7 @@
 // 실행: npm run seed  /  데모 계정: test / 1234
 // 전국 232개 기록 (캠퍼스 46 + 춘천 20 + 서울 40 + 수원 30 + 7도시 76 + 특별 20)
 const bcrypt = require('bcryptjs');
-const db = require('./db');
-
-const exists = db.prepare("SELECT id FROM users WHERE username = 'test'").get();
-if (exists) {
-  console.log('test 계정이 이미 있습니다. memory.db 파일을 지우고 다시 실행하면 초기화됩니다.');
-  process.exit(0);
-}
-
-const hash = bcrypt.hashSync('1234', 10);
-const user = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('test', hash);
-const uid = user.lastInsertRowid;
+const { pool, initDb } = require('./db');
 
 // [장소, 주소, 위도, 경도, 본문, 제목, 감정, 날짜, 키워드(쉼표구분)]
 // (사진/음악은 사용자가 직접 추가 예정이라 비워 둠)
@@ -252,13 +242,36 @@ const diaries = [
   ['포항 호미곶','경북 포항시 남구 호미곶면',36.07806,129.56974,'대구 여행을 연장해서 포항 호미곶까지.\n바다에서 솟은 \'상생의 손\' 조형물이 유명한 곳.\n일출 명소라 새벽에 갔다.\n구름 사이로 떠오르는 해가 손바닥 위에 걸렸다.\n한반도의 가장 동쪽에서 보는 일출은 특별했다.\n대구 여행의 화려한 마무리가 됐다.','상생의 손바닥','평온','2026-05-06','포항,일출'],
 ];
 
-const insert = db.prepare(`INSERT INTO diaries
-  (user_id, place_name, address, lat, lng, content, ai_title, emotion, diary_date, keywords)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+// PostgreSQL은 비동기라 전체를 async로 감싼다.
+(async () => {
+  await initDb(); // 테이블이 없으면 만들어 둠 (서버를 한 번도 안 켰을 때 대비)
 
-for (const d of diaries) {
-  insert.run(uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null);
-}
+  // test 계정이 이미 있으면(이미 시드됨) 그대로 둔다 -> 중복 생성 방지
+  const exists = (await pool.query("SELECT id FROM users WHERE username = 'test'")).rows[0];
+  if (exists) {
+    console.log('test 계정이 이미 있습니다. 초기화하려면 DB에서 test 계정 데이터를 지운 뒤 다시 실행하세요.');
+    await pool.end();
+    return;
+  }
 
-console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다.`);
-console.log('(강원대 춘천캠 23학번 페르소나 / 사진·음악은 직접 추가하세요)');
+  const hash = bcrypt.hashSync('1234', 10);
+  const user = (await pool.query(
+    'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id', ['test', hash]
+  )).rows[0];
+  const uid = user.id;
+
+  const insertSql = `INSERT INTO diaries
+    (user_id, place_name, address, lat, lng, content, ai_title, emotion, diary_date, keywords)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
+
+  for (const d of diaries) {
+    await pool.query(insertSql, [uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null]);
+  }
+
+  console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다.`);
+  console.log('(강원대 춘천캠 23학번 페르소나 / 사진·음악은 직접 추가하세요)');
+  await pool.end();
+})().catch((err) => {
+  console.error('시드 실패:', err.message);
+  process.exit(1);
+});

@@ -3,6 +3,7 @@ require('dotenv').config(); // .env 파일의 환경 변수 불러오기
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const { initDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,8 +42,17 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/diaries', require('./routes/diaries'));
 
 // ---------- 서버 시작 ----------
-app.listen(PORT, () => {
-  console.log(`"기억의 발자국" 서버 실행 중: http://localhost:${PORT}`);
-  if (!process.env.KAKAO_JS_KEY) console.log('⚠ KAKAO_JS_KEY가 없습니다. 지도가 표시되지 않습니다. (.env 확인)');
-  if (!process.env.GEMINI_API_KEY) console.log('⚠ GEMINI_API_KEY가 없습니다. AI 분석 대신 기본값이 저장됩니다. (.env 확인)');
-});
+// DB(테이블)부터 준비한 뒤 서버를 연다. DB 연결 실패 시 원인을 출력하고 종료.
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`"기억의 발자국" 서버 실행 중: http://localhost:${PORT}`);
+      if (!process.env.DATABASE_URL) console.log('⚠ DATABASE_URL이 없습니다. PostgreSQL 연결 문자열을 .env(로컬)/Render 환경변수에 넣어 주세요.');
+      if (!process.env.KAKAO_JS_KEY) console.log('⚠ KAKAO_JS_KEY가 없습니다. 지도가 표시되지 않습니다. (.env 확인)');
+      if (!process.env.GEMINI_API_KEY) console.log('⚠ GEMINI_API_KEY가 없습니다. AI 분석 대신 기본값이 저장됩니다. (.env 확인)');
+    });
+  })
+  .catch((err) => {
+    console.error('❌ DB 초기화 실패. DATABASE_URL을 확인하세요:', err.message);
+    process.exit(1);
+  });
