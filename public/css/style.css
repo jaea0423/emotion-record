@@ -71,7 +71,10 @@ body:not(.has-side-panels) .topbar {
   display: inline-flex; align-items: center; gap: 4px;
 }
 .topbar .logo:hover { box-shadow: var(--shadow); }
-.logo-mark { font-size: .8em; } /* 로고 앞 발자국 */
+.logo-mark { font-size: .8em; } /* (구) 로고 앞 발자국 이모지 - 로그인 페이지에서 사용 */
+/* 로고 뒤로 점점 진해지며 걸어가는 작은 발자국 트레일 */
+.logo-trail { display: inline-flex; align-items: center; margin-left: 7px; }
+.logo-trail svg { display: block; }
 
 /* 뒤로가기 버튼 (지도 외 화면의 좌측 상단) */
 .back-btn {

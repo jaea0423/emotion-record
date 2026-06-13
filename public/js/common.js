@@ -239,7 +239,13 @@ async function renderNav(active) {
   // ----- 중앙 상단 로고 -----
   const top = document.createElement('header');
   top.className = 'topbar';
-  top.innerHTML = `<a class="logo" href="/index.html"><span class="logo-mark">👣</span> 기억의 발자국</a>`;
+  top.innerHTML = `<a class="logo" href="/index.html">기억의 발자국<span class="logo-trail" aria-hidden="true">`
+    + `<svg viewBox="0 0 60 24" width="36" height="15">`
+    + `<ellipse cx="8" cy="16" rx="4" ry="5" fill="#9AA6BC"/>`
+    + `<ellipse cx="22" cy="9" rx="4" ry="5" fill="#6E7EA0"/>`
+    + `<ellipse cx="38" cy="15" rx="4" ry="5" fill="#4C5E86"/>`
+    + `<ellipse cx="52" cy="8" rx="4" ry="5" fill="#2B4570"/>`
+    + `</svg></span></a>`;
   document.body.prepend(top);
 
   // ----- 메인 패널 좌측 상단: 기간 버튼 -----

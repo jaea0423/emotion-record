@@ -2,6 +2,7 @@
 let map, clusterer, diaries = [], places = {};
 const markerPlace = new Map(); // 마커 -> 장소 데이터 (클러스터의 대표 감정 계산용)
 let lastClusterMarkers = null;   // 마지막으로 클릭한 묶음 (상세에서 "뒤로" 갈 때 사용)
+let lastClusterKeys = null;      // 그 묶음에 속한 장소 key 목록 (수정 저장 후 마커가 새로 그려져도 같은 묶음을 복원)
 let emotionFilter = null;        // 왼쪽 목록에서 고른 감정 (null이면 전체 표시)
 let keywordFilter = null;        // 왼쪽 목록에서 고른 키워드 (null이면 전체 표시)
 const markerSize = new Map();    // 마커 -> 픽셀 크기 (겹침 판정용)
@@ -238,16 +239,10 @@ function showCluster(clusterMarkers) {
   const placeList = clusterMarkers.map((m) => markerPlace.get(m)).filter(Boolean);
   const list = placeList.flatMap((p) => p.list);
   if (!list.length) return closePanel();
+  lastClusterKeys = placeList.map((p) => p.key); // 묶음 식별용 (수정 저장 후 복원)
   document.querySelector('.map-layout')?.classList.add('panel-open'); // 좁은 화면: 슬라이드 인
   if (document.body.classList.contains('panel-collapsed')) setPanelCollapsed(false); // 접혀 있으면 펼침
-  // 묶음 중심(평균 위치)에 대표 감정으로 강조 표시
-  if (placeList.length) {
-    const avgLat = placeList.reduce((a, p) => a + p.lat, 0) / placeList.length;
-    const avgLng = placeList.reduce((a, p) => a + p.lng, 0) / placeList.length;
-    const size = Math.min(80 + list.length * 6, 140);
-    showHighlightAt(avgLat, avgLng, dominantEmotion(list), list.length, size);
-  }
-  hideBaseMarkers(clusterMarkers); // 묶음의 원래 마커들을 숨김 (둥둥 강조 뒤로 비치지 않게)
+  drawClusterHighlight(clusterMarkers); // 묶음 중심에 둥둥 강조 + 원래 마커 숨김
   // 이야기(AI)는 시간순(흐름), 목록 표시는 최신이 위로
   const chrono = [...list].sort((a, b) => a.diary_date.localeCompare(b.diary_date) || a.id - b.id);
   const display = [...chrono].reverse();
@@ -362,9 +357,9 @@ function showDetail(d, backKey) {
       ${d.keywords ? `<div class="kw-chips" style="margin-top:10px;">
         ${d.keywords.split(',').map((k) => `<button type="button" class="kw-chip" data-kw="${esc(k)}">#${esc(k)}</button>`).join('')}
       </div>` : ''}
+      <p class="content">${esc(d.content)}</p>
       ${d.photo_path ? `
         <div class="polaroid"><img src="${d.photo_path}" alt="일기 사진"><div class="cap">${esc(d.place_name)}에서</div></div>` : ''}
-      <p class="content">${esc(d.content)}</p>
       ${d.music_title && !musicEmbed ? `
         <div class="musicbox">
           <div class="art">${d.music_thumbnail ? `<img src="${d.music_thumbnail}" alt="">` : '♪'}</div>
@@ -511,9 +506,16 @@ function showEdit(d, backKey) {
     else if (editPhotoRemove) fd.append('remove_photo', '1'); // 기존 사진 삭제
     try {
       await api(`/api/diaries/${d.id}`, { method: 'PUT', body: fd }); // Content-Type은 브라우저가 자동 설정
-      await loadDiaries(); // 마커/목록 갱신
+      await loadDiaries(); // 마커/목록 갱신 (clearHighlight로 둥둥 강조도 지워짐)
       const updated = diaries.find((x) => x.id == d.id);
-      showDetail(updated || d, backKey);
+      // 묶음(클러스터)으로 들어왔다면, 새로 그려진 마커 중 같은 묶음을 찾아 둥둥 강조를 복원
+      // (안 하면 showDetail이 단일 장소로 다시 강조해서, 들어왔던 묶음 대신 작은 마커가 떠 버림)
+      if (backKey === '__cluster__' && lastClusterKeys && lastClusterKeys.length) {
+        const fresh = [];
+        for (const [m, p] of markerPlace) if (lastClusterKeys.includes(p.key)) fresh.push(m);
+        if (fresh.length) { lastClusterMarkers = fresh; drawClusterHighlight(fresh); }
+      }
+      showDetail(updated || d, backKey); // selOverlay가 이미 있으면 showDetail이 다시 강조하지 않음
     } catch (e) {
       document.getElementById('eErr').textContent = e.message;
     }
@@ -533,6 +535,17 @@ function renderEditKw() {
 }
 
 // ---------- 선택된 마커 강조 (검정 테두리 + 둥둥 떠다니기) ----------
+// 묶음(클러스터) 중심에 둥둥 강조 + 묶음에 속한 원래 마커들을 숨김
+function drawClusterHighlight(group) {
+  const placeList = group.map((m) => markerPlace.get(m)).filter(Boolean);
+  if (!placeList.length) return;
+  const list = placeList.flatMap((p) => p.list);
+  const avgLat = placeList.reduce((a, p) => a + p.lat, 0) / placeList.length;
+  const avgLng = placeList.reduce((a, p) => a + p.lng, 0) / placeList.length;
+  const size = Math.min(80 + list.length * 6, 140);
+  showHighlightAt(avgLat, avgLng, dominantEmotion(list), list.length, size);
+  hideBaseMarkers(group); // 둥둥 강조 뒤로 원래 마커가 비치지 않게
+}
 function highlightPlace(p) {
   const emo = dominantEmotion(p.list);
   const size = Math.min(72 + p.list.length * 10, 130); // 마커와 같은 크기
