@@ -817,6 +817,19 @@ body.panel-collapsed .panel { padding-left: 0; padding-right: 0; border-left: no
   .gal-item { margin-bottom: 8px; }
   .song-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
+  /* 키워드: 모바일은 나선 구름 대신 흐름(wrap) 태그 목록 — 모든 키워드가 보이고 스크롤됨 */
+  #cloud {
+    left: 0; right: 0; top: 62px; bottom: 76px;
+    overflow-y: auto; overflow-x: hidden;
+    display: flex; flex-wrap: wrap; align-content: flex-start; justify-content: center;
+    gap: 9px 10px; padding: 16px 14px 30px;
+  }
+  .cloud-chip {
+    position: static; margin: 0; animation: none;
+    padding: 7px 13px; white-space: nowrap;
+  }
+  .cloud-chip:hover { transform: none; } /* 모바일은 호버 확대 불필요 */
+
   /* 작성 폼: 검색줄을 줄바꿈해 입력칸은 한 줄 가득, 버튼은 그 아래 나란히 */
   .card { padding: 18px 16px; }
   .check-row { flex-wrap: wrap; }
