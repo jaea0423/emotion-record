@@ -403,8 +403,10 @@ function showDetail(d, backKey) {
 
 // ---------- 사이드 패널: 일기 편집 (제목/감정/본문/키워드/장소/날짜) ----------
 let editKw = []; // 편집 중인 키워드 목록
+let editPhotoRemove = false; // 저장 시 사진을 지울지
 function showEdit(d, backKey) {
   editKw = (d.keywords || '').split(',').filter(Boolean).slice(0, 5);
+  editPhotoRemove = false;
   const body = document.getElementById('panelBody');
   body.innerHTML = `
     <div class="detail">
@@ -430,6 +432,19 @@ function showEdit(d, backKey) {
       <div class="kw-chips" id="eKwBox" style="margin-bottom:8px;"></div>
       <input id="eKwInput" placeholder="키워드 추가하고 Enter" style="font-size:14.5px;">
 
+      <label>사진 <span class="hint">(최대 1장)</span></label>
+      <div id="ePhotoWrap">
+        <div class="photo-preview" id="ePhotoPrev" style="${d.photo_path ? '' : 'display:none;'}">
+          <img id="ePhotoImg" src="${d.photo_path ? esc(d.photo_path) : ''}" alt="사진">
+          <button type="button" class="pp-del" id="ePhotoDel" title="사진 빼기">✕</button>
+        </div>
+        <input id="ePhoto" type="file" accept="image/*" hidden>
+        <div class="photo-row" style="margin-top:8px;">
+          <button type="button" class="btn" id="ePhotoBtn">📷 ${d.photo_path ? '사진 바꾸기' : '사진 추가'}</button>
+          <span class="hint" id="ePhotoName">${d.photo_path ? '현재 사진 1장' : '선택된 사진 없음'}</span>
+        </div>
+      </div>
+
       <div class="row" style="margin-top:18px;">
         <button class="btn" id="eCancel" style="flex:1;">수정 취소</button>
         <button class="btn main" id="eSave" style="flex:2;">저장</button>
@@ -452,25 +467,46 @@ function showEdit(d, backKey) {
   document.getElementById('cancelBtn').onclick = () => showDetail(d, backKey);
   document.getElementById('eCancel').onclick = () => showDetail(d, backKey);
 
-  // 저장: 바뀐 항목 전부 PUT
+  // ----- 사진 추가/교체/삭제 (최대 1장) -----
+  const ePhoto = document.getElementById('ePhoto');
+  const ePrev = document.getElementById('ePhotoPrev');
+  const eImg = document.getElementById('ePhotoImg');
+  document.getElementById('ePhotoBtn').onclick = () => ePhoto.click();
+  ePhoto.onchange = () => {
+    const f = ePhoto.files[0];
+    if (!f) return;
+    editPhotoRemove = false;
+    eImg.src = URL.createObjectURL(f); // 새 사진 미리보기
+    ePrev.style.display = '';
+    document.getElementById('ePhotoName').textContent = '새 사진 1장 (저장하면 적용)';
+    document.getElementById('ePhotoBtn').textContent = '📷 사진 바꾸기';
+  };
+  document.getElementById('ePhotoDel').onclick = () => {
+    ePhoto.value = '';
+    eImg.src = '';
+    ePrev.style.display = 'none';
+    editPhotoRemove = true; // 저장하면 사진 삭제
+    document.getElementById('ePhotoName').textContent = '사진 없음 (저장하면 삭제)';
+    document.getElementById('ePhotoBtn').textContent = '📷 사진 추가';
+  };
+
+  // 저장: 바뀐 항목 전부 PUT (사진이 있을 수 있어 FormData로 전송)
   document.getElementById('eSave').onclick = async () => {
-    const payload = {
-      place_name: document.getElementById('ePlace').value.trim(),
-      diary_date: document.getElementById('eDate').value,
-      ai_title: document.getElementById('eTitle').value.trim(),
-      emotion: getEmotionPick('ePick'),
-      content: document.getElementById('eContent').value.trim(),
-      keywords: editKw.join(','),
-    };
+    const fd = new FormData();
+    fd.append('place_name', document.getElementById('ePlace').value.trim());
+    fd.append('diary_date', document.getElementById('eDate').value);
+    fd.append('ai_title', document.getElementById('eTitle').value.trim());
+    fd.append('emotion', getEmotionPick('ePick'));
+    fd.append('content', document.getElementById('eContent').value.trim());
+    fd.append('keywords', editKw.join(','));
+    const f = ePhoto.files[0];
+    if (f) fd.append('photo', f);            // 새 사진 추가/교체
+    else if (editPhotoRemove) fd.append('remove_photo', '1'); // 기존 사진 삭제
     try {
-      await api(`/api/diaries/${d.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      await api(`/api/diaries/${d.id}`, { method: 'PUT', body: fd }); // Content-Type은 브라우저가 자동 설정
       await loadDiaries(); // 마커/목록 갱신
       const updated = diaries.find((x) => x.id == d.id);
-      showDetail(updated || { ...d, ...payload, keywords: editKw.join(',') }, backKey);
+      showDetail(updated || d, backKey);
     } catch (e) {
       document.getElementById('eErr').textContent = e.message;
     }

@@ -54,6 +54,16 @@ function cloudinaryPublicId(url) {
   return m ? m[1] : null;
 }
 
+// 사진 파일 삭제 (Cloudinary면 destroy, 로컬이면 unlink). 실패해도 조용히 넘어감.
+async function deletePhotoFile(photoPath) {
+  if (!photoPath) return;
+  if (/^https?:\/\//.test(photoPath)) {
+    try { const pid = cloudinaryPublicId(photoPath); if (pid) await cloudinary.uploader.destroy(pid); } catch (e) {}
+  } else {
+    try { fs.unlinkSync(path.join(__dirname, '..', photoPath)); } catch (e) {}
+  }
+}
+
 // ---------- 로그인 확인 미들웨어 ----------
 // 아래 모든 라우트는 로그인해야만 사용 가능
 function requireLogin(req, res, next) {
@@ -209,10 +219,16 @@ router.get('/:id', async (req, res) => {
 });
 
 // ---------- 일기 수정 ----------
-// AI의 판단은 참고일 뿐 -- 제목/감정/본문/키워드/장소/날짜를 직접 고칠 수 있음
-// [PUT] /api/diaries/:id   body: { ai_title?, emotion?, content?, keywords?, place_name?, diary_date? }
-// (보낸 항목만 부분 수정됨)
-router.put('/:id', async (req, res) => {
+// AI의 판단은 참고일 뿐 -- 제목/감정/본문/키워드/장소/날짜/사진을 직접 고칠 수 있음
+// [PUT] /api/diaries/:id   (사진 변경이 있을 수 있어 multipart/form-data 로 받음)
+//   필드: ai_title?, emotion?, content?, keywords?, place_name?, diary_date?,
+//         photo?(새 사진 파일), remove_photo?('1'이면 기존 사진 삭제)
+router.put('/:id', (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: '사진 업로드에 실패했어요. 5MB 이하의 이미지만 올릴 수 있습니다.' });
+    next();
+  });
+}, async (req, res) => {
   const { ai_title, emotion, content, keywords, place_name, diary_date } = req.body;
 
   // 감정이 왔다면 9가지 목록 안에 있는지 검증 (예외 감정 차단)
@@ -257,6 +273,22 @@ router.put('/:id', async (req, res) => {
     sets.push('diary_date = ?');
     values.push(diary_date);
   }
+
+  // 사진 변경: 새 사진(req.file)이면 교체, remove_photo='1'이면 삭제. 기존 사진은 업데이트 후 정리.
+  let oldPhotoToDelete = null;
+  const existing = await q.get('SELECT photo_path FROM diaries WHERE id = ? AND user_id = ?', [req.params.id, req.session.userId]);
+  if (!existing) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
+  if (req.file) {
+    let newPath;
+    try { newPath = await savePhoto(req.file); }
+    catch (e) { return res.status(502).json({ error: '사진 저장에 실패했어요. 잠시 후 다시 시도해 주세요.' }); }
+    sets.push('photo_path = ?'); values.push(newPath);
+    oldPhotoToDelete = existing.photo_path; // 이전 사진은 교체 후 삭제
+  } else if (req.body.remove_photo === '1') {
+    sets.push('photo_path = ?'); values.push(null);
+    oldPhotoToDelete = existing.photo_path;
+  }
+
   if (sets.length === 0) return res.status(400).json({ error: '수정할 내용이 없습니다.' });
 
   const result = await q.run(
@@ -264,6 +296,9 @@ router.put('/:id', async (req, res) => {
     [...values, req.params.id, req.session.userId]
   );
   if (result.rowCount === 0) return res.status(404).json({ error: '일기를 찾을 수 없습니다.' });
+
+  // 업데이트가 끝났으니 이전 사진 파일 정리 (실패해도 무시)
+  if (oldPhotoToDelete) await deletePhotoFile(oldPhotoToDelete);
 
   // 수정된 최신 일기를 그대로 돌려줌 (프론트가 화면 갱신에 사용)
   res.json(await q.get('SELECT * FROM diaries WHERE id = ?', [req.params.id]));
@@ -278,18 +313,7 @@ router.delete('/:id', async (req, res) => {
   await q.run('DELETE FROM diaries WHERE id = ? AND user_id = ?', [req.params.id, req.session.userId]);
 
   // 업로드된 사진도 같이 삭제 (실패해도 일기 삭제는 성공 처리)
-  if (row.photo_path) {
-    if (/^https?:\/\//.test(row.photo_path)) {
-      // Cloudinary에 올린 사진
-      try {
-        const pid = cloudinaryPublicId(row.photo_path);
-        if (pid) await cloudinary.uploader.destroy(pid);
-      } catch (e) {}
-    } else {
-      // 로컬 파일
-      try { fs.unlinkSync(path.join(__dirname, '..', row.photo_path)); } catch (e) {}
-    }
-  }
+  await deletePhotoFile(row.photo_path);
   res.json({ ok: true });
 });
 
