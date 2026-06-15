@@ -4,6 +4,7 @@
 // 전국 232개 기록 (캠퍼스 46 + 춘천 20 + 서울 40 + 수원 30 + 7도시 76 + 특별 20)
 const bcrypt = require('bcryptjs');
 const { pool, initDb } = require('./db');
+const { dummyPhoto } = require('./dummyPhoto'); // 시연용 더미 사진(SVG 데이터 URI) 생성기
 
 // [장소, 주소, 위도, 경도, 본문, 제목, 감정, 날짜, 키워드(쉼표구분)]
 // (사진/음악은 사용자가 직접 추가 예정이라 비워 둠)
@@ -278,12 +279,13 @@ const SONGS = [
 
   const insertSql = `INSERT INTO diaries
     (user_id, place_name, address, lat, lng, content, ai_title, emotion, diary_date, keywords,
-     music_url, music_title, music_thumbnail)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`;
+     music_url, music_title, music_thumbnail, photo_path)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`;
 
   // 감정별로 곡을 돌아가며 배정(변주). 약 절반의 일기에만 노래를 단다.
   const songCounter = {};
   let withSong = 0;
+  let withPhoto = 0;
   for (let idx = 0; idx < diaries.length; idx++) {
     const d = diaries[idx];
     const emotion = d[6];
@@ -296,11 +298,14 @@ const SONGS = [
       mUrl = song.u; mTitle = song.t; mThumb = song.img;
       withSong++;
     }
-    await pool.query(insertSql, [uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null, mUrl, mTitle, mThumb]);
+    // 약 75%(4개 중 3개)에 더미 사진을 붙임 -> 앨범 벽돌 격자가 채워짐. 나머지 25%는 사진 없음.
+    const photo = idx % 4 !== 0 ? dummyPhoto(idx) : null;
+    if (photo) withPhoto++;
+
+    await pool.query(insertSql, [uid, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8] || null, mUrl, mTitle, mThumb, photo]);
   }
 
-  console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다. (노래 ${withSong}곡 포함)`);
-  console.log('(강원대 춘천캠 23학번 페르소나 / 사진은 직접 추가하세요)');
+  console.log(`완료! test 계정(비밀번호 1234)과 일기 ${diaries.length}개가 생성되었습니다. (노래 ${withSong}곡, 더미 사진 ${withPhoto}장 포함)`);
   await pool.end();
 })().catch((err) => {
   console.error('시드 실패:', err.message);

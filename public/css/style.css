@@ -32,6 +32,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* 접힌 패널 등 화면 밖으로 밀려난 요소가 가로 스크롤(과 그로 인한 미세한 세로 스크롤)을
+   만들지 않도록 가로 넘침을 잘라낸다 */
+html, body { overflow-x: hidden; }
+
 body {
   font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   background: var(--bg);
@@ -260,7 +264,7 @@ label { font-size: 15.5px; font-weight: 500; color: var(--sub); display: block; 
 .check-row .btn { padding: 10px 18px; white-space: nowrap; font-size: 15.5px; }
 
 /* ---------- 지도 페이지 ---------- */
-.map-layout { display: flex; height: 100vh; position: relative; }
+.map-layout { display: flex; height: 100vh; position: relative; overflow: hidden; }
 #map { flex: 1; min-width: 0; }
 /* 지도 타일만 채도를 낮춰 차분한 느낌으로
    (마커는 data: 주소로 만든 이미지라 필터를 안 받음 = 감정 색 유지) */
@@ -835,9 +839,12 @@ body.panel-collapsed { --panel-gap: 0px; }
   /* 모서리 버튼: 패널 오프셋 없이 + 아이콘만 */
   body.has-side-panels .corner-tl { left: 12px; }
   body.has-side-panels .corner-tr { right: 12px; }
-  body.has-side-panels .corner-bl { left: 12px; }
-  body.has-side-panels .corner-br { right: 12px; }
-  .corner-bl, .corner-br { bottom: 12px; }
+  /* 앨범/음악: 독 ↔ 화면 끝 사이 빈 공간의 중앙에 두고, 독과 같은 수평선(세로 중앙)에 맞춤.
+     25vw - 60px = (화면폭 - 독폭 추정 240px)의 1/4 = 왼쪽 빈공간의 중앙. translateX(-50%)로 그 점에 중심을 둠.
+     bottom:27px = 독(바닥 22px·높이 ~52px)의 세로 중앙선에 버튼(높이 ~42px) 중심을 맞춘 값 */
+  body.has-side-panels .corner-bl { left: calc(25vw - 60px); right: auto; transform: translateX(-50%); }
+  body.has-side-panels .corner-br { left: calc(75vw + 60px); right: auto; transform: translateX(-50%); }
+  .corner-bl, .corner-br { bottom: 27px; }
   .corner-pill .dl { display: none; }
   .corner-pill { padding: 11px 13px; }
 
